@@ -2,14 +2,16 @@ from collections import defaultdict
 from pathlib import Path
 from time import sleep
 
+import dataset
 import keyring
 from exiftool import ExifTool
 from geopy import geocoders
 from loguru import logger
 
+geo_table = dataset.Database('postgresql://localhost/imgmeta')['geolocation']
+
 
 def get_addr(query):
-    from imgmeta.database import geo_table as table
     locator = geocoders.GoogleV3(api_key=keyring.get_password("google_map", "api_key"))
     for symbol in ['@', 'http', '#']:
         if symbol in query:
@@ -29,12 +31,21 @@ def get_addr(query):
     return addr
 
 
-def get_img_path(path):
+
+def get_img_path(paths: list[Path]):
+    for path in paths:
+        imgs = _filter_img(path)
+        yield from _sort_img(imgs)
+
+
+def _filter_img(path: Path):
     path = Path(path)
     if path.is_file():
         return [path]
     media_ext = ('.jpg', '.mov', '.png', '.jpeg', '.mp4', '.gif')
-    for img in Path(path).rglob('*.*'):
+    for img in Path(path).rglob('*'):
+        if any(part.startswith('.') for part in path.parts):
+            continue
         if not img.is_file() or _is_hidden(path):
             continue
         if not img.suffix.lower().endswith(media_ext):
@@ -42,13 +53,7 @@ def get_img_path(path):
         yield str(img)
 
 
-def _is_hidden(path):
-    for part in path.parts:
-        if part.startswith('.'):
-            return True
-
-
-def sort_img_path(imgs):
+def _sort_img(imgs):
     imgs_dict = defaultdict(list)
     with ExifTool() as et:
         for img in imgs:
