@@ -1,8 +1,56 @@
 import re
+from pathlib import Path
 
+import pendulum
 from loguru import logger
-from imgmeta.helper import get_addr 
+from sinaspider import Weibo, Artist
 
+
+def gen_weibo_xmp_info(meta):
+    provider = meta.get('XMP:ImageSupplierName')
+    user_id = meta.get('XMP:ImageSupplierID')
+    wb_id = meta.get('XMP:ImageUniqueID')
+    sn = meta.get('XMP:SeriesNumber')
+    if provider != 'Weibo':
+        logger.info(f'provider:{provider} is not Weibo, skipping')
+        return
+    user = Artist(user_id).gen_meta() if user_id else {}
+    weibo = Weibo(wb_id).gen_meta(sn=sn) if wb_id else {}
+    assert user | weibo == weibo | user
+    return user | weibo
+
+
+def rename_single_img(img, et, new_dir=False):
+    raw_file_name = et.get_tag('XMP:RawFileName', str(img))
+    artist = et.get_tag('XMP:Artist', str(img))
+    date = et.get_tag('XMP:DateCreated', str(img))
+    sn = et.get_tag('XMP:SeriesNumber', str(img))
+    if not all([raw_file_name, artist, date]):
+        return
+    date = pendulum.parse(date)
+    inc = 0
+    while True:
+        filename = f'{artist}-{date:%y-%m-%d}'
+        if inc:
+            filename = f'{filename}-{inc:02d}'
+        if sn:
+            filename = f'{filename}-{sn:d}'
+        filename += img.ext
+
+        if new_dir is False:
+            img_new = Path(img.parent, filename)
+        else:
+            img_new = Path(artist, filename)
+            img_new.parent.mkdir()
+
+        if img_new == img:
+            break
+        elif img_new.exists():
+            inc += 1
+        else:
+            img.rename(img_new)
+            logger.info(f'move {img} to {img_new}')
+            break
 
 
 class ImageMetaUpdate:
