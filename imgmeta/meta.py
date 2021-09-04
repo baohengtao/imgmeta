@@ -72,6 +72,7 @@ class ImageMetaUpdate:
             'XMP:Description', 'XMP:UserComment', description)
         self.write_location()
         self.assign_raw_file_name()
+        self.meta.update(gen_weibo_xmp_info(meta))
 
     def assign_raw_file_name(self):
         raw_meta = self.meta.get('XMP:RawFileName')

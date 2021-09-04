@@ -20,3 +20,4 @@ def rename(paths, new_dir=False):
         for img in get_img_path(paths):
             rename_single_img(img, et, new_dir)
       
+
