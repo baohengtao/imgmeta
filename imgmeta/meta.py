@@ -2,17 +2,19 @@ import re
 from pathlib import Path
 
 import pendulum
-from loguru import logger
+from imgmeta import logger
 from sinaspider import Weibo, Artist
+
+from imgmeta.helper import get_addr
 
 
 def gen_weibo_xmp_info(meta):
-    provider = meta.get('XMP:ImageSupplierName')
+    supplier = meta.get('XMP:ImageSupplierName')
     user_id = meta.get('XMP:ImageSupplierID')
     wb_id = meta.get('XMP:ImageUniqueID')
     sn = meta.get('XMP:SeriesNumber')
-    if provider != 'Weibo':
-        logger.info(f'provider:{provider} is not Weibo, skipping')
+    if supplier != 'Weibo':
+        logger.info(f'supplier:{supplier} is not Weibo, skipping')
         return
     user = Artist(user_id).gen_meta() if user_id else {}
     weibo = Weibo(wb_id).gen_meta(sn=sn) if wb_id else {}
@@ -21,8 +23,10 @@ def gen_weibo_xmp_info(meta):
 
 
 def rename_single_img(img, et, new_dir=False):
+    img = Path(img)
     raw_file_name = et.get_tag('XMP:RawFileName', str(img))
     artist = et.get_tag('XMP:Artist', str(img))
+    publisher = et.get_tag('XMP:Publisher', str(img))
     date = et.get_tag('XMP:DateCreated', str(img))
     sn = et.get_tag('XMP:SeriesNumber', str(img))
     if not all([raw_file_name, artist, date]):
@@ -31,17 +35,16 @@ def rename_single_img(img, et, new_dir=False):
     inc = 0
     while True:
         filename = f'{artist}-{date:%y-%m-%d}'
-        if inc:
-            filename = f'{filename}-{inc:02d}'
-        if sn:
-            filename = f'{filename}-{sn:d}'
-        filename += img.ext
-
-        if new_dir is False:
-            img_new = Path(img.parent, filename)
+        filename += f'-{inc:02d}' if inc else ''
+        filename += f'-{sn:d}' if sn else ''
+        filename += img.suffix
+        logger.info(filename)
+        if new_dir:
+            path = Path('retweet')/publisher if publisher else Path(artist)
+            path.mkdir(exist_ok=True, parents=True)
         else:
-            img_new = Path(artist, filename)
-            img_new.parent.mkdir()
+            path = img.parent
+        img_new = path/filename
 
         if img_new == img:
             break
@@ -51,6 +54,7 @@ def rename_single_img(img, et, new_dir=False):
             img.rename(img_new)
             logger.info(f'move {img} to {img_new}')
             break
+
 
 
 class ImageMetaUpdate:
@@ -72,7 +76,8 @@ class ImageMetaUpdate:
             'XMP:Description', 'XMP:UserComment', description)
         self.write_location()
         self.assign_raw_file_name()
-        self.meta.update(gen_weibo_xmp_info(meta))
+        if weibo_info:=gen_weibo_xmp_info(self.meta):
+            self.meta.update(weibo_info)
 
     def assign_raw_file_name(self):
         raw_meta = self.meta.get('XMP:RawFileName')
@@ -90,7 +95,7 @@ class ImageMetaUpdate:
             self.meta['XMP:Location'] = location
         if not location:
             return
-        address = Locator().get_addr(location)
+        address = get_addr(location)
         if not address:
             logger.warning(f'{self.filename}=>Cannot locate {location}')
         return address

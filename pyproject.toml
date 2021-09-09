@@ -7,11 +7,10 @@ authors = ["Bao Hengtao <baohengtao@users.noreply.github.com>"]
 [tool.poetry.dependencies]
 python = "^3.9"
 geopy = "^2.2.0"
-pymongo = "^3.12.0"
 loguru = "^0.5.3"
 photoscript = "^0.1.4"
-osxphotos = "^0.42.80"
-sinaspider = "^0.3.2"
+osxphotos = "*"
+sinaspider = {path="../sinaspider", develop=true}
 click = "^8.0.1"
 
 [tool.poetry.dev-dependencies]
@@ -23,6 +22,9 @@ ptpython = "*"
 jupyterlab-lsp = "*"
 python-lsp-server = "^1.2.1"
 Sphinx = "^4.1.2"
+
+[tool.poetry.scripts]
+imgmeta = 'imgmeta.script:app'
 
 [build-system]
 requires = ["poetry-core>=1.0.0", 'setuptools', 'wheel']

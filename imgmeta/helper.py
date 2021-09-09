@@ -6,7 +6,9 @@ import dataset
 import keyring
 from exiftool import ExifTool
 from geopy import geocoders
-from loguru import logger
+import geopy
+from imgmeta import logger
+import time
 
 geo_table = dataset.Database('postgresql://localhost/imgmeta')['geolocation']
 
@@ -19,7 +21,15 @@ def get_addr(query):
             return
     if addr := geo_table.find_one(query=query):
         return addr
-    addr = locator.geocode(query, language='zh')
+    while True:
+        try:
+            addr = locator.geocode(query, language='zh')
+            break
+        except geopy.exc.GeocoderUnavailable as e:
+            logger.info('sleeping 1 miniute')
+            time.sleep(60)
+            continue
+            
     addr = dict(
         query=query,
         address=addr.address,
@@ -31,22 +41,23 @@ def get_addr(query):
     return addr
 
 
-
-def get_img_path(paths: list[Path]):
+def get_img_path(paths: list[Path], sort=False):
     for path in paths:
         imgs = _filter_img(path)
-        yield from _sort_img(imgs)
+        if sort:
+            yield from _sort_img(imgs)
+        else:
+            yield from imgs
 
 
 def _filter_img(path: Path):
     path = Path(path)
-    if path.is_file():
-        return [path]
     media_ext = ('.jpg', '.mov', '.png', '.jpeg', '.mp4', '.gif')
-    for img in Path(path).rglob('*'):
+    imgs = [path] if path.is_file() or path.rglob('*')
+    for img in imgs:
         if any(part.startswith('.') for part in path.parts):
             continue
-        if not img.is_file() or _is_hidden(path):
+        if not img.is_file():
             continue
         if not img.suffix.lower().endswith(media_ext):
             continue
