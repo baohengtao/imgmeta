@@ -5,7 +5,7 @@ description = ""
 authors = ["Bao Hengtao <baohengtao@users.noreply.github.com>"]
 
 [tool.poetry.dependencies]
-python = "^3.9"
+python = "^3.10"
 geopy = "^2.2.0"
 loguru = "^0.5.3"
 photoscript = "^0.1.4"

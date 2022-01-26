@@ -2,49 +2,58 @@ import re
 from pathlib import Path
 
 import pendulum
-from imgmeta import logger
-from sinaspider import Weibo, Artist
+from sinaspider.model import Weibo, Artist, init_database
 
+from imgmeta import console
 from imgmeta.helper import get_addr
+from exiftool import ExifTool
 
+init_database('sinaspider')
 
-def gen_weibo_xmp_info(meta):
+def gen_weibo_xmp_info(meta) -> dict:
     supplier = meta.get('XMP:ImageSupplierName')
     user_id = meta.get('XMP:ImageSupplierID')
     wb_id = meta.get('XMP:ImageUniqueID')
     sn = meta.get('XMP:SeriesNumber')
+    res = {}
     if supplier != 'Weibo':
-        logger.info(f'supplier:{supplier} is not Weibo, skipping')
-        return
-    user = Artist(user_id).gen_meta() if user_id else {}
-    weibo = Weibo(wb_id).gen_meta(sn=sn) if wb_id else {}
-    assert user | weibo == weibo | user
-    return user | weibo
+        console.log(f'supplier:{supplier} is not Weibo, skipping')
+    if user_id:
+        artist = Artist.from_id(user_id)
+        res |= artist.xmp_info
+    if wb_id and (wb := Weibo.from_id(wb_id)):
+        res |= wb.gen_meta(sn)
+
+    return res
 
 
-def rename_single_img(img, et, new_dir=False):
-    img = Path(img)
-    raw_file_name = et.get_tag('XMP:RawFileName', str(img))
-    artist = et.get_tag('XMP:Artist', str(img))
-    publisher = et.get_tag('XMP:Publisher', str(img))
-    date = et.get_tag('XMP:DateCreated', str(img))
-    sn = et.get_tag('XMP:SeriesNumber', str(img))
+def rename_single_img(img, new_dir=False):
+    with ExifTool() as et:
+        img = Path(img)
+        raw_file_name = et.get_tag('XMP:RawFileName', str(img))
+        artist = et.get_tag('XMP:Artist', str(img)) or et.get_tag('XMP:ImageCreatorName', str(img))
+        publisher = et.get_tag('XMP:Publisher', str(img))
+        date = et.get_tag('XMP:DateCreated', str(img)) or ''
+        date = date.rstrip('+08:00')
+        date = date.rstrip('.000000')
+        sn = et.get_tag('XMP:SeriesNumber', str(img))
     if not all([raw_file_name, artist, date]):
+        console.log(img)
         return
-    date = pendulum.parse(date)
+    fmt = 'YYYY:MM:DD HH:mm:ss.SSSSSS'
+    date = pendulum.from_format(date, fmt=fmt[:len(date)])
     inc = 0
     while True:
         filename = f'{artist}-{date:%y-%m-%d}'
         filename += f'-{inc:02d}' if inc else ''
         filename += f'-{sn:d}' if sn else ''
         filename += img.suffix
-        logger.info(filename)
         if new_dir:
-            path = Path('retweet')/publisher if publisher else Path(artist)
+            path = Path('retweet') / publisher if publisher else Path(artist)
             path.mkdir(exist_ok=True, parents=True)
         else:
             path = img.parent
-        img_new = path/filename
+        img_new = path / filename
 
         if img_new == img:
             break
@@ -52,9 +61,8 @@ def rename_single_img(img, et, new_dir=False):
             inc += 1
         else:
             img.rename(img_new)
-            logger.info(f'move {img} to {img_new}')
+            console.log(f'move {img} to {img_new}')
             break
-
 
 
 class ImageMetaUpdate:
@@ -62,7 +70,7 @@ class ImageMetaUpdate:
         self.meta = meta.copy()
         self.filename = meta['File:FileName']
         while True:
-            original = self.meta
+            original = self.meta.copy()
             self.loop()
             if original == self.meta:
                 break
@@ -76,8 +84,12 @@ class ImageMetaUpdate:
             'XMP:Description', 'XMP:UserComment', description)
         self.write_location()
         self.assign_raw_file_name()
-        if weibo_info:=gen_weibo_xmp_info(self.meta):
-            self.meta.update(weibo_info)
+        try:
+            if weibo_info := gen_weibo_xmp_info(self.meta):
+                self.meta.update(weibo_info)
+        except AttributeError as e:
+            print(self.meta)
+            raise e
 
     def assign_raw_file_name(self):
         raw_meta = self.meta.get('XMP:RawFileName')
@@ -97,7 +109,7 @@ class ImageMetaUpdate:
             return
         address = get_addr(location)
         if not address:
-            logger.warning(f'{self.filename}=>Cannot locate {location}')
+            console.log(f'{self.filename}=>Cannot locate {location}', style='warning')
         return address
 
     def write_location(self):
@@ -113,7 +125,7 @@ class ImageMetaUpdate:
             geo = [float(x) for x in geography.split()]
             for x, y in zip(com, geo):
                 if x - y > 1e-9:
-                    logger.warning(f'{self.filename}:composite {composite} not eq geography {geography}')
+                    console.log(f'{self.filename}:composite {composite} not eq geography {geography}', style='warning')
                     return
         latitude = f"{address['latitude']:.7f}"
         longitude = f"{address['longitude']:.7f}"
@@ -157,7 +169,7 @@ class ImageMetaUpdate:
         v = self.meta.get(tag, '')
         v_aux = self.meta.get(tag_aux, '')
         if v and v != v_aux:
-            logger.warning(f'{self.filename}=>>>{tag}:{v} not equal {tag_aux}:{v_aux}')
+            console.info(f'{self.filename}=>>>{tag}:{v} not equal {tag_aux}:{v_aux}', style='info')
         else:
             self.meta[tag] = value
             self.meta[tag_aux] = value
@@ -182,12 +194,12 @@ class ImageMetaUpdate:
         if not src_values:
             return
         if len(src_values) > 1:
-            logger.warning(f"{self.meta.get('SourceFile')}: Multi values of src_meta => {src_meta}")
+            console.log(f"{self.meta.get('SourceFile')}: Multi values of src_meta => {src_meta}", style='warning')
             return
         if dst_values and dst_values[0] != src_values[0] and not diff_ignore:
             if diff_print:
-                logger.warning(
-                    f"{self.meta.get('SourceFile')}: Values not same =>src_meta:{src_meta},dst_meta:{dst_meta}")
+                console.log(
+                    f"{self.meta.get('SourceFile')}: Values not same =>src_meta:{src_meta},dst_meta:{dst_meta}", style='warning')
             if dst_values[0] != '0000:00:00 00:00:00':
                 return
         value = src_values[0]
@@ -228,9 +240,9 @@ def gen_description(meta):
     creator = ' '.join([a, c]) if a not in c else c
     url = meta.get('XMP:BlogURL', '') or meta.get('XMP:ImageCreatorID', '')
     text = meta.get('XMP:BlogTitle', '')
-    user_info = '-'.join(str(x) for x in [source, creator] if x)
+    # user_info = '-'.join(str(x) for x in [source, creator] if x)
     description = '  '.join(str(x).replace('\n', '\t')
-                            for x in [text, url, user_info] if x)
+                            for x in [text, url] if x)
 
     return description
 
