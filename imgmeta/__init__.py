@@ -1,8 +1,14 @@
-from rich.console import Console
-from rich.progress import Progress
-from rich.theme import Theme
+"""
+Write Image Meta
+"""
+import click
+import typer
 from rich import traceback
-import typer, click
+from rich.console import Console
+from rich.progress import Progress, BarColumn, TimeRemainingColumn
+from rich.theme import Theme
+__version__='0.3.0'
+
 traceback.install(show_locals=True, suppress=[typer, click])
 custom_theme = Theme({
     "info": "dim cyan",
@@ -10,4 +16,9 @@ custom_theme = Theme({
     "error": "bold red"
 })
 console = Console(theme=custom_theme)
-progress = Progress(console=console)
+
+
+def get_progress():
+    return Progress("[progress.description]{task.description}", BarColumn(),
+                    "[progress.percentage]{task.completed} of {task.total:>2.0f}({task.percentage:>02.1f}%)",
+                    TimeRemainingColumn(), console=console)

@@ -1,31 +1,18 @@
-[tool.poetry]
+[build-system]
+requires = ["flit_core >=3.2,<4"]
+build-backend = "flit_core.buildapi"
+
+[project]
 name = "imgmeta"
-version = "0.1.1"
-description = ""
-authors = ["Bao Hengtao <baohengtao@users.noreply.github.com>"]
+authors = [{name = "BaoHengtao", email = "baohengtao@users.noreply.github.com"}]
+readme = "README.md"
+license = {file = "LICENSE"}
+classifiers = ["License :: OSI Approved :: MIT License"]
+dynamic = ["version", "description"]
+dependencies = ["geopy", "rich", "typer"]
 
-[tool.poetry.dependencies]
-python = "^3.10"
-geopy = "^2.2.0"
-loguru = "^0.5.3"
-photoscript = "^0.1.4"
-osxphotos = "*"
-sinaspider = {path="../sinaspider", develop=true}
-click = "^8.0.1"
-
-[tool.poetry.dev-dependencies]
-pytest = "^5.2"
-jupyterlab = "*"
-JLDracula = "*"
-jupyterlab_vim = "*"
-ptpython = "*"
-jupyterlab-lsp = "*"
-python-lsp-server = "^1.2.1"
-Sphinx = "^4.1.2"
-
-[tool.poetry.scripts]
+[project.scripts]
 imgmeta = 'imgmeta.script:app'
 
-[build-system]
-requires = ["poetry-core>=1.0.0", 'setuptools', 'wheel']
-build-backend = "poetry.core.masonry.api"
+[project.urls]
+Home = "https://github.com/baohengtao/imgmeta"

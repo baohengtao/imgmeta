@@ -2,41 +2,56 @@ import re
 from pathlib import Path
 
 import pendulum
-from sinaspider.model import Weibo, Artist, init_database
-
+from sinaspider.model import Weibo
+from twimeta.model import Twitter
+from sinaspider.model import Artist as WeiboArtist
+from twimeta.model import Artist as TwiArtist
 from imgmeta import console
 from imgmeta.helper import get_addr
-from exiftool import ExifTool
 
-init_database('sinaspider')
 
-def gen_weibo_xmp_info(meta) -> dict:
-    supplier = meta.get('XMP:ImageSupplierName')
+def gen_xmp_info(meta) -> dict:
+    supplier = meta.get('XMP:ImageSupplierName', '')
     user_id = meta.get('XMP:ImageSupplierID')
-    wb_id = meta.get('XMP:ImageUniqueID')
+    unique_id = meta.get('XMP:ImageUniqueID')
     sn = meta.get('XMP:SeriesNumber')
     res = {}
-    if supplier != 'Weibo':
-        console.log(f'supplier:{supplier} is not Weibo, skipping')
-    if user_id:
-        artist = Artist.from_id(user_id)
-        res |= artist.xmp_info
-    if wb_id and (wb := Weibo.from_id(wb_id)):
-        res |= wb.gen_meta(sn)
+    match supplier.lower():
+        case 'weibo':
+            if unique_id and unique_id.isdigit() and (wb := Weibo.from_id(unique_id)):
+                res |= wb.gen_meta(sn)
+            if user_id:
+                artist = WeiboArtist.from_id(user_id)
+                res |= artist.xmp_info
+        case 'instagram':
+            from insmeta.model import get_meta
+            if filename := meta.get('XMP:RawFileName'):
+                try:
+                    user_id = int(user_id)
+                except (TypeError, ValueError):
+                    user_id = None
+                res = get_meta(filename, user_id=user_id)
+
+        case 'twitter':
+            if user_text_id := meta.get('XMP:ImageCreatorName'):
+                if artist := TwiArtist.from_id(user_text_id):
+                    res |= artist.xmp_info
+            if unique_id and (twitter := Twitter.get_or_none(id=unique_id)):
+                res |= twitter.gen_meta(sn)
 
     return res
 
 
-def rename_single_img(img, new_dir=False):
-    with ExifTool() as et:
-        img = Path(img)
-        raw_file_name = et.get_tag('XMP:RawFileName', str(img))
-        artist = et.get_tag('XMP:Artist', str(img)) or et.get_tag('XMP:ImageCreatorName', str(img))
-        publisher = et.get_tag('XMP:Publisher', str(img))
-        date = et.get_tag('XMP:DateCreated', str(img)) or ''
-        date = date.rstrip('+08:00')
-        date = date.rstrip('.000000')
-        sn = et.get_tag('XMP:SeriesNumber', str(img))
+def rename_single_img(img, et, new_dir=False, root=None):
+    img = Path(img)
+    raw_file_name = et.get_tag('XMP:RawFileName', str(img))
+    artist = et.get_tag('XMP:Artist', str(img)) or et.get_tag(
+        'XMP:ImageCreatorName', str(img))
+    artist = str(artist)
+    date = et.get_tag('XMP:DateCreated', str(img)) or ''
+    date = date.rstrip('+08:00')
+    date = date.rstrip('.000000')
+    sn = et.get_tag('XMP:SeriesNumber', str(img))
     if not all([raw_file_name, artist, date]):
         console.log(img)
         return
@@ -46,10 +61,10 @@ def rename_single_img(img, new_dir=False):
     while True:
         filename = f'{artist}-{date:%y-%m-%d}'
         filename += f'-{inc:02d}' if inc else ''
-        filename += f'-{sn:d}' if sn else ''
+        filename += f'-{int(sn):d}' if sn else ''
         filename += img.suffix
         if new_dir:
-            path = Path('retweet') / publisher if publisher else Path(artist)
+            path = Path(root)/artist if root else Path(artist)
             path.mkdir(exist_ok=True, parents=True)
         else:
             path = img.parent
@@ -84,12 +99,8 @@ class ImageMetaUpdate:
             'XMP:Description', 'XMP:UserComment', description)
         self.write_location()
         self.assign_raw_file_name()
-        try:
-            if weibo_info := gen_weibo_xmp_info(self.meta):
-                self.meta.update(weibo_info)
-        except AttributeError as e:
-            print(self.meta)
-            raise e
+        if xmp_info := gen_xmp_info(self.meta):
+            self.meta.update(xmp_info)
 
     def assign_raw_file_name(self):
         raw_meta = self.meta.get('XMP:RawFileName')
@@ -109,7 +120,8 @@ class ImageMetaUpdate:
             return
         address = get_addr(location)
         if not address:
-            console.log(f'{self.filename}=>Cannot locate {location}', style='warning')
+            console.log(
+                f'{self.filename}=>Cannot locate {location}', style='warning')
         return address
 
     def write_location(self):
@@ -125,10 +137,12 @@ class ImageMetaUpdate:
             geo = [float(x) for x in geography.split()]
             for x, y in zip(com, geo):
                 if x - y > 1e-9:
-                    console.log(f'{self.filename}:composite {composite} not eq geography {geography}', style='warning')
+                    console.log(
+                        f'{self.filename}:composite {composite} not eq'
+                        f'geography {geography}', style='warning')
                     return
-        latitude = f"{address['latitude']:.7f}"
-        longitude = f"{address['longitude']:.7f}"
+        latitude = f"{address.latitude:.7f}"
+        longitude = f"{address.longitude:.7f}"
         latitude, longitude = float(latitude), float(longitude)
         self.meta['XMP:GPSLatitude'] = latitude
         self.meta['XMP:GPSLongitude'] = longitude
@@ -136,7 +150,7 @@ class ImageMetaUpdate:
 
     def fix_meta(self):
         tuple_tag_to_move = [
-            (':BaseURL', 'XMP:SourceURL'),
+            (':BaseURL', 'XMP:BlogURL'),
             (':ImageDescription', 'XMP:Description'),
             ('IPTC:Keywords', 'XMP:Subject'),
             ('QuickTime:Artist', 'XMP:Artist'),
@@ -157,9 +171,11 @@ class ImageMetaUpdate:
         for src_tag in time_to_move:
             self.move_tag(src_tag, 'XMP:DateCreated', diff_print=False)
         self.copy_tag('File:FileName', 'XMP:RawFileName', diff_print=False)
-        if self.meta['File:MIMEType'] == 'video/mp4':
+        if self.meta['File:MIMEType'] in ['video/mp4', 'video/quicktime']:
             self.copy_tag('XMP:DateCreated', 'QuickTime:CreateDate')
             self.copy_tag('XMP:Title', 'QuickTime:Title', diff_ignore=True)
+            self.copy_tag('XMP:Description',
+                          'QuickTime:Description', diff_ignore=True)
 
         for k, v in self.meta.items():
             if str(v) in ['None', '无']:
@@ -169,7 +185,9 @@ class ImageMetaUpdate:
         v = self.meta.get(tag, '')
         v_aux = self.meta.get(tag_aux, '')
         if v and v != v_aux:
-            console.info(f'{self.filename}=>>>{tag}:{v} not equal {tag_aux}:{v_aux}', style='info')
+            console.log(
+                f"{self.filename}=>> > {tag}: {v}"
+                f" not equal {tag_aux}: {v_aux}", style='info')
         else:
             self.meta[tag] = value
             self.meta[tag_aux] = value
@@ -186,7 +204,8 @@ class ImageMetaUpdate:
         if write:
             self.meta.update(write)
 
-    def _move_or_copy_tag(self, src_tag, dst_tag, is_copy=False, diff_print=True, diff_ignore=False):
+    def _move_or_copy_tag(self, src_tag, dst_tag,
+                          is_copy=False, diff_print=True, diff_ignore=False):
         assert (src_tag != dst_tag)
         src_meta, src_values = self._fetch_tag(src_tag)
         dst_meta, dst_values = self._fetch_tag(dst_tag)
@@ -194,12 +213,17 @@ class ImageMetaUpdate:
         if not src_values:
             return
         if len(src_values) > 1:
-            console.log(f"{self.meta.get('SourceFile')}: Multi values of src_meta => {src_meta}", style='warning')
+            console.log(
+                f"{self.meta.get('SourceFile')}: Multi values of src_meta "
+                f"=> {src_meta}", style='warning')
             return
         if dst_values and dst_values[0] != src_values[0] and not diff_ignore:
             if diff_print:
                 console.log(
-                    f"{self.meta.get('SourceFile')}: Values not same =>src_meta:{src_meta},dst_meta:{dst_meta}", style='warning')
+                    f"{self.meta.get('SourceFile')}:"
+                    "Values not same =>"
+                    f"src_meta:{src_meta},dst_meta:{dst_meta}",
+                    style='warning')
             if dst_values[0] != '0000:00:00 00:00:00':
                 return
         value = src_values[0]
@@ -235,12 +259,8 @@ def gen_title(meta):
 
 
 def gen_description(meta):
-    source = meta.get('XMP:Source') or meta.get('XMP:ImageSupplierName')
-    a, c = meta.get('XMP:Artist', ''), meta.get('XMP:Creator', '')
-    creator = ' '.join([a, c]) if a not in c else c
     url = meta.get('XMP:BlogURL', '') or meta.get('XMP:ImageCreatorID', '')
     text = meta.get('XMP:BlogTitle', '')
-    # user_info = '-'.join(str(x) for x in [source, creator] if x)
     description = '  '.join(str(x).replace('\n', '\t')
                             for x in [text, url] if x)
 
