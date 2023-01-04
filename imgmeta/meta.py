@@ -49,8 +49,7 @@ def rename_single_img(img, et, new_dir=False, root=None):
         'XMP:ImageCreatorName', str(img))
     artist = str(artist)
     date = et.get_tag('XMP:DateCreated', str(img)) or ''
-    date = date.rstrip('+08:00')
-    date = date.rstrip('.000000')
+    date = date.rstrip('+08:00').rstrip('.000000')
     sn = et.get_tag('XMP:SeriesNumber', str(img))
     if not all([raw_file_name, artist, date]):
         console.log(img)

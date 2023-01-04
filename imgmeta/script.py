@@ -32,10 +32,8 @@ def write_meta_item(img, et):
 
 @app.command(help='Write meta to imgs')
 def write_meta(paths: List[Path]):
-    _write_meta(paths)
-
-
-def _write_meta(paths: List[Path]):
+    if not isinstance(paths, list):
+        paths = [paths]
     imgs = itertools.chain.from_iterable(
         get_img_path(p, sort=False) for p in paths)
     imgs = list(imgs)
@@ -54,6 +52,8 @@ def rename(paths: List[Path],
                False, '--new-dir', '-d', help='whether make new dir'),
            root: Path = Option(None)):
 
+    if not isinstance(paths, list):
+        paths = [paths]
     imgs_sort = itertools.chain.from_iterable(
         get_img_path(p, sort=True) for p in paths)
     imgs = itertools.chain.from_iterable(
