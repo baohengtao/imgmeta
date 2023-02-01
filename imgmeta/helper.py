@@ -58,7 +58,7 @@ def get_addr(query):
     return addr
 
 
-def get_img_path(path: Path, sort=False):
+def get_img_path(path: Path, sort=False, skip_dir=None):
     media_ext = ('.jpg', '.mov', '.png', '.jpeg', '.mp4', '.gif')
     files = []
     paths = [path] if path.is_file() else path.iterdir()
@@ -70,6 +70,8 @@ def get_img_path(path: Path, sort=False):
                 continue
             files.append(str(p))
         elif p.is_dir():
+            if skip_dir and skip_dir in p.stem:
+                continue
             yield from get_img_path(p, sort)
     if sort:
         yield from _sort_img(files)

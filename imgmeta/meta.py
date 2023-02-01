@@ -18,7 +18,7 @@ def gen_xmp_info(meta) -> dict:
     res = {}
     match supplier.lower():
         case 'weibo':
-            if unique_id and unique_id.isdigit() and (wb := Weibo.from_id(unique_id)):
+            if unique_id and (wb := Weibo.from_id(unique_id)):
                 res |= wb.gen_meta(sn)
             if user_id:
                 artist = WeiboArtist.from_id(user_id)
