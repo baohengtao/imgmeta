@@ -31,7 +31,7 @@ def gen_xmp_info(meta) -> dict:
                 assert user_id
             if user_id:
                 user_id = int(user_id)
-            if ids:=get_id_from_filename(filename):
+            if ids := get_id_from_filename(filename):
                 assert not unique_id or unique_id == ids[0]
                 assert not user_id or user_id == ids[1]
                 unique_id, user_id = ids
@@ -39,8 +39,6 @@ def gen_xmp_info(meta) -> dict:
                 res |= Insta.from_id(unique_id, user_id).meta
             if user_id:
                 res |= InstaArtist.from_id(user_id).meta
-            
-            
 
         case 'twitter':
             if user_text_id := meta.get('XMP:ImageCreatorName'):
@@ -116,8 +114,7 @@ class ImageMetaUpdate:
         filename = self.meta['File:FileName']
         if raw_meta and raw_meta != filename:
             return
-        raw_file_name = get_raw_file_name(self.meta)
-        if raw_file_name:
+        if raw_file_name := get_raw_file_name(self.meta):
             self.meta['XMP:RawFileName'] = raw_file_name
 
     def _gen_location(self):
@@ -134,8 +131,7 @@ class ImageMetaUpdate:
         return address
 
     def write_location(self):
-        address = self._gen_location()
-        if not address:
+        if not (address := self._gen_location()):
             return
         composite = self.meta.get('Composite:GPSPosition')
         geography = self.meta.get('XMP:Geography')
@@ -162,17 +158,20 @@ class ImageMetaUpdate:
             (':BaseURL', 'XMP:BlogURL'),
             (':ImageDescription', 'XMP:Description'),
             ('IPTC:Keywords', 'XMP:Subject'),
-            ('QuickTime:Artist', 'XMP:Artist'),
-            ('EXIF:Artist', 'XMP:Artist'),
-            ('PNG:Artist', 'XMP:Artist'),
-            ('IPTC:Source', 'XMP:Source'),
-            ('PNG:Source', 'XMP:Source'),
-            ('EXIF:ImageUnique', 'XMP:ImageUniqueID')
+            # ('QuickTime:Artist', 'XMP:Artist'),
+            # ('EXIF:Artist', 'XMP:Artist'),
+            # ('PNG:Artist', 'XMP:Artist'),
+            (':Artist', 'XMP:Artist'),
+            # ('IPTC:Source', 'XMP:Source'),
+            # ('PNG:Source', 'XMP:Source'),
+            (':Source', 'XMP:Source'),
+            # ('EXIF:ImageUnique', 'XMP:ImageUniqueID')
+            (':ImageUnique', 'XMP:ImageUniqueID')
         ]
         time_to_move = [
             ':DateTimeOriginal',
-            ':EXIF:CreateDate',
-            ':IPTC:DateCreated',
+            'EXIF:CreateDate',
+            'IPTC:DateCreated',
         ]
 
         for src_tag, dst_tag in tuple_tag_to_move:
@@ -202,15 +201,13 @@ class ImageMetaUpdate:
             self.meta[tag_aux] = value
 
     def move_tag(self, src_tag, dst_tag, **kwargs):
-        write = self._move_or_copy_tag(
-            src_tag, dst_tag, is_copy=False, **kwargs)
-        if write:
+        if write := self._move_or_copy_tag2(
+                src_tag, dst_tag, is_copy=False, **kwargs):
             self.meta.update(write)
 
     def copy_tag(self, src_tag, dst_tag, **kwargs):
-        write = self._move_or_copy_tag(
-            src_tag, dst_tag, is_copy=True, **kwargs)
-        if write:
+        if write := self._move_or_copy_tag2(
+                src_tag, dst_tag, is_copy=True, **kwargs):
             self.meta.update(write)
 
     def _move_or_copy_tag(self, src_tag, dst_tag,
@@ -242,6 +239,35 @@ class ImageMetaUpdate:
             return dst_update
         else:
             return dict(**dst_update, **src_remove)
+
+    def _move_or_copy_tag2(self, src_tag, dst_tag,
+                           is_copy=False, diff_print=True, diff_ignore=False):
+        assert (src_tag != dst_tag)
+        src_meta = {k: v for k, v in self.meta.items(
+        ) if k.endswith(src_tag) and k != dst_tag}
+        if not (src_values := set(src_meta.values())):
+            return
+        if len(src_values) > 1:
+            console.log(
+                f"{self.meta.get('SourceFile')}: Multi values of src_meta "
+                f"=> {src_meta}", style='warning')
+            return
+        src_value = src_values.pop()
+        dst_value = self.meta.get(dst_tag)
+        if dst_value is not None and dst_value != src_value and not diff_ignore:
+            if diff_print:
+                console.log(
+                    f"{self.meta.get('SourceFile')}:"
+                    "Values not same =>"
+                    f"src_meta => {src_meta},dst_meta => {dst_tag}:{dst_value}",
+                    style='warning')
+            if dst_value != '0000:00:00 00:00:00':
+                return
+        dst_update = {dst_tag: src_value}
+        if is_copy:
+            return dst_update
+        else:
+            return {k: '' for k in src_meta} | dst_update
 
     def _fetch_tag(self, tag):
         sub_meta = {k: v for k, v in self.meta.items() if k.endswith(tag)}
