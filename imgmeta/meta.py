@@ -2,10 +2,9 @@ import re
 from pathlib import Path
 
 import pendulum
-from sinaspider.model import Weibo
-from twimeta.model import Twitter
-from sinaspider.model import Artist as WeiboArtist
-from twimeta.model import Artist as TwiArtist
+from sinaspider.model import Weibo, Artist as WeiboArtist
+from twimeta.model import Twitter, Artist as TwiArtist
+from insmeta.model import Insta, Artist as InstaArtist
 from imgmeta import console
 from imgmeta.helper import get_addr
 
@@ -15,6 +14,7 @@ def gen_xmp_info(meta) -> dict:
     user_id = meta.get('XMP:ImageSupplierID')
     unique_id = meta.get('XMP:ImageUniqueID')
     sn = meta.get('XMP:SeriesNumber')
+    filename = meta.get('XMP:RawFileName', '')
     res = {}
     match supplier.lower():
         case 'weibo':
@@ -24,13 +24,23 @@ def gen_xmp_info(meta) -> dict:
                 artist = WeiboArtist.from_id(user_id)
                 res |= artist.xmp_info
         case 'instagram':
-            from insmeta.model import get_meta
-            if filename := meta.get('XMP:RawFileName'):
-                try:
-                    user_id = int(user_id)
-                except (TypeError, ValueError):
-                    user_id = None
-                res = get_meta(filename, user_id=user_id)
+            from insmeta.model import (
+                get_id_from_filename, normalize_ins_id)
+            if unique_id:
+                unique_id = normalize_ins_id(unique_id)
+                assert user_id
+            if user_id:
+                user_id = int(user_id)
+            if ids:=get_id_from_filename(filename):
+                assert not unique_id or unique_id == ids[0]
+                assert not user_id or user_id == ids[1]
+                unique_id, user_id = ids
+            if unique_id:
+                res |= Insta.from_id(unique_id, user_id).meta
+            if user_id:
+                res |= InstaArtist.from_id(user_id).meta
+            
+            
 
         case 'twitter':
             if user_text_id := meta.get('XMP:ImageCreatorName'):
