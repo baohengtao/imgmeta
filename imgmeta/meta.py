@@ -7,6 +7,7 @@ from twimeta.model import Twitter, Artist as TwiArtist
 from insmeta.model import Insta, Artist as InstaArtist
 from imgmeta import console
 from imgmeta.helper import get_addr
+import sinaspider.exceptions
 
 
 def gen_xmp_info(meta) -> dict:
@@ -14,12 +15,17 @@ def gen_xmp_info(meta) -> dict:
     user_id = meta.get('XMP:ImageSupplierID')
     unique_id = meta.get('XMP:ImageUniqueID')
     sn = meta.get('XMP:SeriesNumber')
-    filename = meta.get('XMP:RawFileName', '')
+    raw_filename = meta.get('XMP:RawFileName', '')
     res = {}
     match supplier.lower():
         case 'weibo':
-            if unique_id and (wb := Weibo.from_id(unique_id)):
-                res |= wb.gen_meta(sn)
+            if unique_id:
+                try:
+                    wb = Weibo.from_id(unique_id)
+                except sinaspider.exceptions.WeiboNotFoundError as e:
+                    console.log(f"{meta['File:FileName']}=>{unique_id}:{e}")
+                else:
+                    res |= wb.gen_meta(sn)
             if user_id:
                 artist = WeiboArtist.from_id(user_id)
                 res |= artist.xmp_info
@@ -31,7 +37,7 @@ def gen_xmp_info(meta) -> dict:
                 assert user_id
             if user_id:
                 user_id = int(user_id)
-            if ids := get_id_from_filename(filename):
+            if ids := get_id_from_filename(raw_filename):
                 assert not unique_id or unique_id == ids[0]
                 assert not user_id or user_id == ids[1]
                 unique_id, user_id = ids
@@ -57,7 +63,7 @@ def rename_single_img(img, et, new_dir=False, root=None):
         'XMP:ImageCreatorName', str(img))
     artist = str(artist)
     date = et.get_tag('XMP:DateCreated', str(img)) or ''
-    date = date.rstrip('+08:00').rstrip('.000000')
+    date = date.removesuffix('+08:00').removesuffix('.000000')
     sn = et.get_tag('XMP:SeriesNumber', str(img))
     if not all([raw_file_name, artist, date]):
         console.log(img)
@@ -158,32 +164,24 @@ class ImageMetaUpdate:
             (':BaseURL', 'XMP:BlogURL'),
             (':ImageDescription', 'XMP:Description'),
             ('IPTC:Keywords', 'XMP:Subject'),
-            # ('QuickTime:Artist', 'XMP:Artist'),
-            # ('EXIF:Artist', 'XMP:Artist'),
-            # ('PNG:Artist', 'XMP:Artist'),
             (':Artist', 'XMP:Artist'),
-            # ('IPTC:Source', 'XMP:Source'),
-            # ('PNG:Source', 'XMP:Source'),
             (':Source', 'XMP:Source'),
-            # ('EXIF:ImageUnique', 'XMP:ImageUniqueID')
-            (':ImageUnique', 'XMP:ImageUniqueID')
-        ]
-        time_to_move = [
-            ':DateTimeOriginal',
-            'EXIF:CreateDate',
-            'IPTC:DateCreated',
+            (':ImageUnique', 'XMP:ImageUniqueID'),
+            ('EXIF:CreateDate', 'XMP:DateCreated'),
         ]
 
         for src_tag, dst_tag in tuple_tag_to_move:
-            self.move_tag(src_tag, dst_tag)
-        for src_tag in time_to_move:
-            self.move_tag(src_tag, 'XMP:DateCreated', diff_print=False)
-        self.copy_tag('File:FileName', 'XMP:RawFileName', diff_print=False)
+            self.transfer_tag(src_tag, dst_tag)
+
+        self.transfer_tag('File:FileName', 'XMP:RawFileName', diff_print=False, is_move=False)
         if self.meta['File:MIMEType'] in ['video/mp4', 'video/quicktime']:
-            self.copy_tag('XMP:DateCreated', 'QuickTime:CreateDate')
-            self.copy_tag('XMP:Title', 'QuickTime:Title', diff_ignore=True)
-            self.copy_tag('XMP:Description',
-                          'QuickTime:Description', diff_ignore=True)
+            self.transfer_tag('XMP:DateCreated',
+                              'QuickTime:CreateDate', is_move=False)
+            self.transfer_tag('XMP:Title', 'QuickTime:Title',
+                              diff_ignore=True, is_move=False)
+            self.transfer_tag('XMP:Description',
+                              'QuickTime:Description', 
+                              diff_ignore=True, is_move=False)
 
         for k, v in self.meta.items():
             if str(v) in ['None', '无']:
@@ -200,51 +198,13 @@ class ImageMetaUpdate:
             self.meta[tag] = value
             self.meta[tag_aux] = value
 
-    def move_tag(self, src_tag, dst_tag, **kwargs):
-        if write := self._move_or_copy_tag2(
-                src_tag, dst_tag, is_copy=False, **kwargs):
-            self.meta.update(write)
+    
 
-    def copy_tag(self, src_tag, dst_tag, **kwargs):
-        if write := self._move_or_copy_tag2(
-                src_tag, dst_tag, is_copy=True, **kwargs):
-            self.meta.update(write)
-
-    def _move_or_copy_tag(self, src_tag, dst_tag,
-                          is_copy=False, diff_print=True, diff_ignore=False):
-        assert (src_tag != dst_tag)
-        src_meta, src_values = self._fetch_tag(src_tag)
-        dst_meta, dst_values = self._fetch_tag(dst_tag)
-        assert (len(dst_meta) <= 1)
-        if not src_values:
-            return
-        if len(src_values) > 1:
-            console.log(
-                f"{self.meta.get('SourceFile')}: Multi values of src_meta "
-                f"=> {src_meta}", style='warning')
-            return
-        if dst_values and dst_values[0] != src_values[0] and not diff_ignore:
-            if diff_print:
-                console.log(
-                    f"{self.meta.get('SourceFile')}:"
-                    "Values not same =>"
-                    f"src_meta:{src_meta},dst_meta:{dst_meta}",
-                    style='warning')
-            if dst_values[0] != '0000:00:00 00:00:00':
-                return
-        value = src_values[0]
-        dst_update = {dst_tag: value}
-        src_remove = {k: '' for k in src_meta}
-        if is_copy:
-            return dst_update
-        else:
-            return dict(**dst_update, **src_remove)
-
-    def _move_or_copy_tag2(self, src_tag, dst_tag,
-                           is_copy=False, diff_print=True, diff_ignore=False):
+    def transfer_tag(self, src_tag, dst_tag,
+                     is_move=True, diff_print=True, diff_ignore=False):
         assert (src_tag != dst_tag)
         src_meta = {k: v for k, v in self.meta.items(
-        ) if k.endswith(src_tag) and k != dst_tag}
+        ) if k.endswith(src_tag) and k != dst_tag and v != ''}
         if not (src_values := set(src_meta.values())):
             return
         if len(src_values) > 1:
@@ -253,27 +213,48 @@ class ImageMetaUpdate:
                 f"=> {src_meta}", style='warning')
             return
         src_value = src_values.pop()
-        dst_value = self.meta.get(dst_tag)
-        if dst_value is not None and dst_value != src_value and not diff_ignore:
-            if diff_print:
-                console.log(
-                    f"{self.meta.get('SourceFile')}:"
-                    "Values not same =>"
-                    f"src_meta => {src_meta},dst_meta => {dst_tag}:{dst_value}",
-                    style='warning')
-            if dst_value != '0000:00:00 00:00:00':
+        dst_value = self.meta.get(dst_tag, '')
+        if (dst_value != '' and dst_value != src_value
+                and not diff_ignore):
+            try:
+                assert isinstance(dst_value, str)
+                assert isinstance(src_value, str)
+                assert (dst_value and src_value)
+                src_value = self._deal_conflict(src_value, dst_value)
+            except ValueError as e:
+                if diff_print:
+                    console.log(e)
+                    console.log(
+                        f"{self.meta.get('SourceFile')}: Values not same =>"
+                        f"src_meta:{src_meta},dst_meta =>{dst_tag}:{dst_value}",
+                        style='warning')
                 return
         dst_update = {dst_tag: src_value}
-        if is_copy:
-            return dst_update
-        else:
-            return {k: '' for k in src_meta} | dst_update
 
-    def _fetch_tag(self, tag):
-        sub_meta = {k: v for k, v in self.meta.items() if k.endswith(tag)}
-        values = set(str(v) for v in sub_meta.values())
-        values = list(values)
-        return sub_meta, values
+        if is_move:
+            dst_update |= {k: '' for k in src_meta}
+        self.meta.update(dst_update)
+
+    @staticmethod
+    def _deal_conflict(src_value: str, dst_value: str):
+        t1, t2 = sorted([src_value, dst_value])
+        # re_time = re.compile(r'\d{4}:\d{2}:\d{2}( \d{2}:\d{2}:\d{2})*')
+        re_time = re.compile(r'^\d{4}:\d{2}:\d{2} \d{2}:\d{2}:\d{2}')
+        if not re_time.match(t1):
+            raise ValueError(f'Conflict value: {t1} {t2}')
+        else:
+            assert re_time.match(t2)
+            t1 = t1.removesuffix('+08:00')
+            t2 = t2.removesuffix('+08:00')
+            if t1 == '0000:00:00 00:00:00':
+                return t2
+            t1, t2 = pendulum.parse(t1), pendulum.parse(t2)
+            if (t1 - t2).in_seconds() == 0 or t1 - t2 == pendulum.duration(hours=8):
+                return t2.strftime('%Y:%m:%d %H:%M:%S')
+            elif t1.date() == t2.date() and t1.time() == pendulum.time(0, 0, 0):
+                return t2.strftime('%Y:%m:%d %H:%M:%S')
+            else:
+                raise ValueError(f'Conflict time: {t1} {t2}')
 
 
 def gen_title(meta):
