@@ -8,6 +8,7 @@ from insmeta.model import Insta, Artist as InstaArtist
 from imgmeta import console
 from imgmeta.helper import get_addr
 import sinaspider.exceptions
+import questionary
 
 
 def gen_xmp_info(meta) -> dict:
@@ -94,36 +95,43 @@ def rename_single_img(img, et, new_dir=False, root=None):
 
 
 class ImageMetaUpdate:
-    def __init__(self, meta):
+    def __init__(self, meta, prompt=False, time_fix=False):
+        self.prompt = prompt
+        self.time_fix = time_fix
         self.meta = meta.copy()
         self.filename = meta['File:FileName']
+        self.filepath = meta['SourceFile']
+
+    def process_meta(self):
         while True:
-            original = self.meta.copy()
+            orignial = self.meta.copy()
             self.loop()
-            if original == self.meta:
+            if orignial == self.meta:
                 break
+        return self.meta
 
     def loop(self):
+        if xmp_info := gen_xmp_info(self.meta):
+            self.meta.update(xmp_info)
         self.fix_meta()
+        self.write_location()
+        self.assign_raw_file_name()
+
         description = gen_description(self.meta)
         title = gen_title(self.meta)
         self._assign_multi_tag('XMP:Title', 'XMP:Caption', title)
         self._assign_multi_tag(
             'XMP:Description', 'XMP:UserComment', description)
-        self.write_location()
-        self.assign_raw_file_name()
-        if xmp_info := gen_xmp_info(self.meta):
-            self.meta.update(xmp_info)
 
     def assign_raw_file_name(self):
         raw_meta = self.meta.get('XMP:RawFileName')
         filename = self.meta['File:FileName']
         if raw_meta and raw_meta != filename:
             return
-        if raw_file_name := get_raw_file_name(self.meta):
-            self.meta['XMP:RawFileName'] = raw_file_name
+        raw_file_name = get_raw_file_name(self.meta)
+        self.meta['XMP:RawFileName'] = raw_file_name or filename
 
-    def _gen_location(self):
+    def write_location(self):
         location = self.meta.get('XMP:Location')
         if location == '无':
             location = ''
@@ -134,10 +142,6 @@ class ImageMetaUpdate:
         if not address:
             console.log(
                 f'{self.filename}=>Cannot locate {location}', style='warning')
-        return address
-
-    def write_location(self):
-        if not (address := self._gen_location()):
             return
         composite = self.meta.get('Composite:GPSPosition')
         geography = self.meta.get('XMP:Geography')
@@ -169,39 +173,48 @@ class ImageMetaUpdate:
             (':ImageUnique', 'XMP:ImageUniqueID'),
             ('EXIF:CreateDate', 'XMP:DateCreated'),
         ]
+        mp4_tag_to_copy = [
+            ('XMP:DateCreated', 'QuickTime:CreateDate'),
+            ('XMP:Title', 'QuickTime:Title'),
+            ('XMP:Description', 'QuickTime:Description')
+        ]
 
         for src_tag, dst_tag in tuple_tag_to_move:
             self.transfer_tag(src_tag, dst_tag)
 
-        self.transfer_tag('File:FileName', 'XMP:RawFileName', diff_print=False, is_move=False)
         if self.meta['File:MIMEType'] in ['video/mp4', 'video/quicktime']:
-            self.transfer_tag('XMP:DateCreated',
-                              'QuickTime:CreateDate', is_move=False)
-            self.transfer_tag('XMP:Title', 'QuickTime:Title',
-                              diff_ignore=True, is_move=False)
-            self.transfer_tag('XMP:Description',
-                              'QuickTime:Description', 
-                              diff_ignore=True, is_move=False)
+            for src_tag, dst_tag in mp4_tag_to_copy:
+                self.transfer_tag(src_tag, dst_tag, is_move=False)
 
         for k, v in self.meta.items():
-            if str(v) in ['None', '无']:
+            assert v is not None
+            if v == '无':
                 self.meta[k] = ''
 
     def _assign_multi_tag(self, tag, tag_aux, value):
+        if value == '':
+            if (tag not in self.meta and
+                    tag_aux not in self.meta):
+                return
         v = self.meta.get(tag, '')
         v_aux = self.meta.get(tag_aux, '')
-        if v and v != v_aux:
-            console.log(
-                f"{self.filename}=>> > {tag}: {v}"
-                f" not equal {tag_aux}: {v_aux}", style='info')
+        to_update = {tag: value, tag_aux: value}
+        if not v or v == v_aux or v == value:
+            self.meta.update(to_update)
+            return
         else:
-            self.meta[tag] = value
-            self.meta[tag_aux] = value
+            assert not v_aux
+        console.log(
+            f"{self.filepath}: {tag} {v} not equal {value} "
+            f"and no {tag_aux} found.", style='info')
+        if self.prompt:
+            console.log(
+                f'[u b]{self.filepath}  {tag}[/u b]: discard [b]{v}[/b] '
+                f'and write [b]{value} ?[/b]')
+            if questionary.confirm('discard or not').unsafe_ask():
+                self.meta.update(to_update)
 
-    
-
-    def transfer_tag(self, src_tag, dst_tag,
-                     is_move=True, diff_print=True, diff_ignore=False):
+    def transfer_tag(self, src_tag, dst_tag, is_move=True):
         assert (src_tag != dst_tag)
         src_meta = {k: v for k, v in self.meta.items(
         ) if k.endswith(src_tag) and k != dst_tag and v != ''}
@@ -214,21 +227,27 @@ class ImageMetaUpdate:
             return
         src_value = src_values.pop()
         dst_value = self.meta.get(dst_tag, '')
-        if (dst_value != '' and dst_value != src_value
-                and not diff_ignore):
+        if (dst_value != '' and dst_value != src_value):
             try:
                 assert isinstance(dst_value, str)
                 assert isinstance(src_value, str)
                 assert (dst_value and src_value)
                 src_value = self._deal_conflict(src_value, dst_value)
             except ValueError as e:
-                if diff_print:
-                    console.log(e)
-                    console.log(
-                        f"{self.meta.get('SourceFile')}: Values not same =>"
-                        f"src_meta:{src_meta},dst_meta =>{dst_tag}:{dst_value}",
-                        style='warning')
-                return
+                if 'time' in str(e) and not self.time_fix:
+                    return
+
+                console.log(
+                    f"{self.filepath}: {src_meta} not equal "
+                    f"{dst_tag} {dst_value}", style="info")
+                if not self.prompt:
+                    return
+                console.print(f'[b u]{self.filepath} {dst_tag}[/b u]: '
+                              'conflict value found')
+                src_value = questionary.select(
+                    'which one you want to keep',
+                    choices=[src_value, dst_value],
+                    use_shortcuts=True).unsafe_ask()
         dst_update = {dst_tag: src_value}
 
         if is_move:
@@ -249,9 +268,11 @@ class ImageMetaUpdate:
             if t1 == '0000:00:00 00:00:00':
                 return t2
             t1, t2 = pendulum.parse(t1), pendulum.parse(t2)
-            if (t1 - t2).in_seconds() == 0 or t1 - t2 == pendulum.duration(hours=8):
-                return t2.strftime('%Y:%m:%d %H:%M:%S')
-            elif t1.date() == t2.date() and t1.time() == pendulum.time(0, 0, 0):
+            is_same = (t2 - t1).in_seconds() == 0
+            is_same |= t2 - t1 == pendulum.duration(hours=8)
+            is_same |= (t1.date() == t2.date() and
+                        t1.time() == pendulum.time(0, 0, 0))
+            if is_same:
                 return t2.strftime('%Y:%m:%d %H:%M:%S')
             else:
                 raise ValueError(f'Conflict time: {t1} {t2}')
@@ -277,7 +298,7 @@ def gen_title(meta):
 def gen_description(meta):
     url = meta.get('XMP:BlogURL', '') or meta.get('XMP:ImageCreatorID', '')
     text = meta.get('XMP:BlogTitle', '')
-    description = '  '.join(str(x).replace('\n', '\t')
+    description = '  '.join(x.replace('\n', '\t')
                             for x in [text, url] if x)
 
     return description

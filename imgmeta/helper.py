@@ -110,3 +110,26 @@ def diff_meta(meta, original):
         else:
             to_write[k] = v
     return to_write
+
+
+def diff_meta2(modified: dict, original: dict):
+    assert set(modified).issuperset(original)
+    to_write = {}
+    for k, v in modified.items():
+        if k in original and v == original[k]:
+            continue
+        assert k in original or v
+        to_write[k] = v
+    return to_write
+
+
+def show_diff(modified: dict, original: dict):
+    assert set(modified).issuperset(original)
+    for k, v in modified.items():
+        if k in original and v == original[k]:
+            continue
+        assert k in original or v
+        if v != '':
+            console.log(f'+{k}: {v}', style='green')
+        if k in original:
+            console.log(f'-{k}: {original[k]}', style='red')
