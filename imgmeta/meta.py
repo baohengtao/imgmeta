@@ -102,18 +102,19 @@ class ImageMetaUpdate:
         self.filename = meta['File:FileName']
         self.filepath = meta['SourceFile']
 
-    def process_meta(self):
-        while True:
-            orignial = self.meta.copy()
-            self.loop()
-            if orignial == self.meta:
-                break
-        return self.meta
+    # def process_meta(self):
+    #     while True:
+    #         orignial = self.meta.copy()
+    #         self.loop()
+    #         if orignial == self.meta:
+    #             break
+    #     return self.meta
 
-    def loop(self):
+    def process_meta(self):
         if xmp_info := gen_xmp_info(self.meta):
+            for v in xmp_info.values():
+                assert v
             self.meta.update(xmp_info)
-        self.fix_meta()
         self.write_location()
         self.assign_raw_file_name()
 
@@ -122,6 +123,8 @@ class ImageMetaUpdate:
         self._assign_multi_tag('XMP:Title', 'XMP:Caption', title)
         self._assign_multi_tag(
             'XMP:Description', 'XMP:UserComment', description)
+        self.fix_meta()
+        return self.meta
 
     def assign_raw_file_name(self):
         raw_meta = self.meta.get('XMP:RawFileName')
@@ -138,8 +141,7 @@ class ImageMetaUpdate:
             self.meta['XMP:Location'] = location
         if not location:
             return
-        address = get_addr(location)
-        if not address:
+        if not (address := get_addr(location)):
             console.log(
                 f'{self.filename}=>Cannot locate {location}', style='warning')
             return
@@ -198,8 +200,21 @@ class ImageMetaUpdate:
                 return
         v = self.meta.get(tag, '')
         v_aux = self.meta.get(tag_aux, '')
+        if v_aux and v != v_aux:
+            console.log(
+                f"{self.filepath}: found unexpected tag {tag_aux}:{v_aux}",
+                style='info')
+            if not self.prompt:
+                return
+            console.log(
+                f'[u b]{self.filepath}  {tag_aux}[/u b]: discard {v_aux}?')
+            if questionary.confirm('discard or not').unsafe_ask():
+                v_aux = ''
+            else:
+                return
+
         to_update = {tag: value, tag_aux: value}
-        if not v or v == v_aux or v == value:
+        if v == v_aux or v == value:
             self.meta.update(to_update)
             return
         else:
@@ -209,8 +224,8 @@ class ImageMetaUpdate:
             f"and no {tag_aux} found.", style='info')
         if self.prompt:
             console.log(
-                f'[u b]{self.filepath}  {tag}[/u b]: discard [b]{v}[/b] '
-                f'and write [b]{value} ?[/b]')
+                f'[u b]{self.filepath}  {tag}[/u b]: discard '
+                f'[b red]{v}[/b red] and write [b red]{value} ?[/b red]')
             if questionary.confirm('discard or not').unsafe_ask():
                 self.meta.update(to_update)
 
