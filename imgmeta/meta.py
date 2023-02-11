@@ -57,15 +57,13 @@ def gen_xmp_info(meta) -> dict:
     return res
 
 
-def rename_single_img(img, et, new_dir=False, root=None):
-    img = Path(img)
-    raw_file_name = et.get_tag('XMP:RawFileName', str(img))
-    artist = et.get_tag('XMP:Artist', str(img)) or et.get_tag(
-        'XMP:ImageCreatorName', str(img))
-    artist = str(artist)
-    date = et.get_tag('XMP:DateCreated', str(img)) or ''
+def rename_single_img(img: Path, meta: dict, new_dir=False, root=None):
+    raw_file_name = meta.get('XMP:RawFileName')
+    artist = meta.get('XMP:Artist') or meta.get(
+        'XMP:ImageCreatorName')
+    date = meta.get('XMP:DateCreated', '')
     date = date.removesuffix('+08:00').removesuffix('.000000')
-    sn = et.get_tag('XMP:SeriesNumber', str(img))
+    sn = meta.get('XMP:SeriesNumber')
     if not all([raw_file_name, artist, date]):
         console.log(img)
         return
@@ -102,18 +100,14 @@ class ImageMetaUpdate:
         self.filename = meta['File:FileName']
         self.filepath = meta['SourceFile']
 
-    # def process_meta(self):
-    #     while True:
-    #         orignial = self.meta.copy()
-    #         self.loop()
-    #         if orignial == self.meta:
-    #             break
-    #     return self.meta
-
     def process_meta(self):
         if xmp_info := gen_xmp_info(self.meta):
-            for v in xmp_info.values():
-                assert v
+            for k, v in xmp_info.items():
+                if v == '':
+                    assert not self.meta.get(k)
+                else:
+                    assert v
+            xmp_info = {k: v for k, v in xmp_info.items() if v != ''}
             self.meta.update(xmp_info)
         self.write_location()
         self.assign_raw_file_name()
@@ -172,6 +166,7 @@ class ImageMetaUpdate:
             ('IPTC:Keywords', 'XMP:Subject'),
             (':Artist', 'XMP:Artist'),
             (':Source', 'XMP:Source'),
+            (':UserComment', 'XMP:UserComment'),
             (':ImageUnique', 'XMP:ImageUniqueID'),
             ('EXIF:CreateDate', 'XMP:DateCreated'),
         ]

@@ -2,10 +2,11 @@ import time
 from collections import defaultdict
 from pathlib import Path
 from time import sleep
+from typing import Iterator
 
 import geopy
 import keyring
-from exiftool import ExifTool
+from exiftool import ExifToolHelper
 from geopy import geocoders
 from peewee import Model, TextField, FloatField
 from playhouse.postgres_ext import PostgresqlExtDatabase
@@ -58,7 +59,7 @@ def get_addr(query):
     return addr
 
 
-def get_img_path(path: Path, sort=False, skip_dir=None):
+def get_img_path(path: Path, sort=False, skip_dir=None) -> Iterator[Path]:
     media_ext = ('.jpg', '.mov', '.png', '.jpeg', '.mp4', '.gif')
     files = []
     paths = [path] if path.is_file() else path.iterdir()
@@ -68,7 +69,7 @@ def get_img_path(path: Path, sort=False, skip_dir=None):
         elif p.is_file():
             if not p.suffix.lower().endswith(media_ext):
                 continue
-            files.append(str(p))
+            files.append(p)
         elif p.is_dir():
             if skip_dir and skip_dir in p.stem:
                 continue
@@ -79,15 +80,15 @@ def get_img_path(path: Path, sort=False, skip_dir=None):
         yield from files
 
 
-def _sort_img(imgs):
+def _sort_img(imgs: list[Path]) -> Iterator[Path]:
+    with ExifToolHelper() as et:
+        tags = et.get_tags(imgs, 'XMP:ImageUniqueID') if imgs else []
     imgs_dict = defaultdict(list)
-    with ExifTool() as et:
-        for img in imgs:
-            img_id = et.get_tag('XMP:ImageUniqueID', img)
-            imgs_dict[img_id].append(img)
-    for key, value in sorted(imgs_dict.items(), key=lambda x: -len(x[1])):
+    for tag in tags:
+        imgs_dict[tag.get('XMP:ImageUniqueID')].append(tag['SourceFile'])
+    for value in sorted(imgs_dict.values(), key=lambda x: -len(x)):
         for img in sorted(value):
-            yield img
+            yield Path(img)
 
 
 def diff_meta(meta, original):
@@ -116,7 +117,7 @@ def diff_meta2(modified: dict, original: dict):
     assert set(modified).issuperset(original)
     to_write = {}
     for k, v in modified.items():
-        if k in original and v == original[k]:
+        if k in original and str(v) == str(original[k]):
             continue
         assert k in original or v
         to_write[k] = v
