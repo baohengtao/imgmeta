@@ -17,7 +17,6 @@ def write_meta(
         paths: List[Path],
         prompt: bool = False,
         time_fix: bool = False):
-    # todo: check track behavior when err raised.
     if not isinstance(paths, list):
         paths = [paths]
     imgs = itertools.chain.from_iterable(

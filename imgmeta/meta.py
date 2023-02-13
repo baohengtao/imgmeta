@@ -54,7 +54,7 @@ def gen_xmp_info(meta) -> dict:
             if unique_id and (twitter := Twitter.get_or_none(id=unique_id)):
                 res |= twitter.gen_meta(sn)
 
-    return res
+    return {k: str(v).strip() for k, v in res.items()}
 
 
 def rename_single_img(img: Path, meta: dict, new_dir=False, root=None):
@@ -112,11 +112,13 @@ class ImageMetaUpdate:
         self.write_location()
         self.assign_raw_file_name()
 
+        self.move_meta()
         description = gen_description(self.meta)
         title = gen_title(self.meta)
         self._assign_multi_tag('XMP:Title', 'XMP:Caption', title)
         self._assign_multi_tag(
             'XMP:Description', 'XMP:UserComment', description)
+        self.copy_meta()
         self.fix_meta()
         return self.meta
 
@@ -159,7 +161,7 @@ class ImageMetaUpdate:
         self.meta['XMP:GPSLongitude'] = longitude
         self.meta['XMP:Geography'] = f'{latitude} {longitude}'
 
-    def fix_meta(self):
+    def move_meta(self):
         tuple_tag_to_move = [
             (':BaseURL', 'XMP:BlogURL'),
             (':ImageDescription', 'XMP:Description'),
@@ -169,19 +171,23 @@ class ImageMetaUpdate:
             (':UserComment', 'XMP:UserComment'),
             (':ImageUnique', 'XMP:ImageUniqueID'),
             ('EXIF:CreateDate', 'XMP:DateCreated'),
+            (':Title', 'XMP:Title'),
+            (':Description', 'XMP:Description'),
         ]
+        for src_tag, dst_tag in tuple_tag_to_move:
+            self.transfer_tag(src_tag, dst_tag)
+
+    def copy_meta(self):
         mp4_tag_to_copy = [
             ('XMP:DateCreated', 'QuickTime:CreateDate'),
             ('XMP:Title', 'QuickTime:Title'),
             ('XMP:Description', 'QuickTime:Description')
         ]
-
-        for src_tag, dst_tag in tuple_tag_to_move:
-            self.transfer_tag(src_tag, dst_tag)
-
         if self.meta['File:MIMEType'] in ['video/mp4', 'video/quicktime']:
             for src_tag, dst_tag in mp4_tag_to_copy:
                 self.transfer_tag(src_tag, dst_tag, is_move=False)
+
+    def fix_meta(self):
 
         for k, v in self.meta.items():
             assert v is not None
@@ -308,8 +314,7 @@ def gen_title(meta):
 def gen_description(meta):
     url = meta.get('XMP:BlogURL', '') or meta.get('XMP:ImageCreatorID', '')
     text = meta.get('XMP:BlogTitle', '')
-    description = '  '.join(x.replace('\n', '\t')
-                            for x in [text, url] if x)
+    description = ' '.join([text, url]).strip()
 
     return description
 
