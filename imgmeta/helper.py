@@ -127,7 +127,7 @@ def diff_meta2(modified: dict, original: dict):
 def show_diff(modified: dict, original: dict):
     assert set(modified).issuperset(original)
     for k, v in modified.items():
-        if k in original and v == original[k]:
+        if k in original and str(v) == str(original[k]):
             continue
         assert k in original or v
         if v != '':
