@@ -35,10 +35,9 @@ def gen_xmp_info(meta) -> dict:
                 artist = WeiboArtist.from_id(user_id)
                 res |= artist.xmp_info
         case 'instagram':
-            from insmeta.model import (
-                get_id_from_filename, normalize_ins_id)
+            from insmeta.model import get_id_from_filename
             if unique_id:
-                unique_id = normalize_ins_id(unique_id)
+                unique_id = int(unique_id)
                 assert user_id
             if user_id:
                 user_id = int(user_id)

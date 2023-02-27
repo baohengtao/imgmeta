@@ -36,6 +36,8 @@ def write_meta(
                     console.log(img, style='bold')
                     show_diff(xmp_info, meta)
                     console.log()
+            except AssertionError as e:
+                raise
             except Exception as e:
                 Path('./problem').mkdir(exist_ok=True)
                 new_img = Path('./problem')/img.name
