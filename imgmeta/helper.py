@@ -8,7 +8,7 @@ import geopy
 import keyring
 from exiftool import ExifToolHelper
 from geopy import geocoders
-from peewee import Model, TextField, FloatField
+from peewee import FloatField, Model, TextField
 from playhouse.postgres_ext import PostgresqlExtDatabase
 
 from imgmeta import console
@@ -91,29 +91,7 @@ def _sort_img(imgs: list[Path]) -> Iterator[Path]:
             yield Path(img)
 
 
-def diff_meta(meta, original):
-    if not meta:
-        return
-    to_write = dict()
-    for k, v in meta.items():
-        for white_list in ['ICC_Profile', 'MarkerNotes', 'Composite']:
-            if k.startswith(white_list):
-                k = None
-                break
-        if not k:
-            continue
-
-        v_meta = str(v).strip()
-        v_ori = str(original.get(k, '')).strip()
-        if v_meta == v_ori:
-            if k in original and v_meta == '':
-                to_write[k] = ''
-        else:
-            to_write[k] = v
-    return to_write
-
-
-def diff_meta2(modified: dict, original: dict):
+def diff_meta(modified: dict, original: dict):
     assert set(modified).issuperset(original)
     to_write = {}
     for k, v in modified.items():

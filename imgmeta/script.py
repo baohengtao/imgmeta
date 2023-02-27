@@ -7,7 +7,7 @@ from exiftool import ExifToolHelper
 from typer import Option, Typer
 
 from imgmeta import console, get_progress
-from imgmeta.helper import diff_meta2, get_img_path, show_diff
+from imgmeta.helper import diff_meta, get_img_path, show_diff
 from imgmeta.meta import ImageMetaUpdate, rename_single_img
 
 app = Typer()
@@ -31,7 +31,7 @@ def write_meta(
                 meta = et.get_metadata(img)[0]
                 xmp_info = ImageMetaUpdate(
                     meta, prompt, time_fix).process_meta()
-                if to_write := diff_meta2(xmp_info, meta):
+                if to_write := diff_meta(xmp_info, meta):
                     et.set_tags(img, to_write)
                     console.log(img, style='bold')
                     show_diff(xmp_info, meta)
