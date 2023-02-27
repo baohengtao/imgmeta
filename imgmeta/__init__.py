@@ -5,8 +5,12 @@ import click
 import typer
 from rich import traceback
 from rich.console import Console
-from rich.progress import (BarColumn, Progress, TaskProgressColumn, TextColumn,
-                           TimeRemainingColumn)
+from rich.progress import (
+    BarColumn, Progress,
+    TaskProgressColumn,
+    TextColumn,
+    TimeRemainingColumn
+)
 from rich.theme import Theme
 
 __version__ = '0.3.0'
@@ -14,8 +18,9 @@ __version__ = '0.3.0'
 traceback.install(show_locals=True, suppress=[typer, click])
 custom_theme = Theme({
     "info": "dim cyan",
-    "warning": "magenta",
-    "error": "bold red"
+    "warning": "bold bright_yellow on dark_orange",
+    "error": "bold bright_red on dark_red",
+    "notice": "bold magenta"
 })
 console = Console(theme=custom_theme, log_time=False, highlight=False)
 

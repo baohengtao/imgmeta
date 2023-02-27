@@ -2,13 +2,17 @@ import re
 from pathlib import Path
 
 import pendulum
-from sinaspider.model import Weibo, Artist as WeiboArtist
-from twimeta.model import Twitter, Artist as TwiArtist
-from insmeta.model import Insta, Artist as InstaArtist
+import questionary
+import sinaspider.exceptions
+from insmeta.model import Artist as InstaArtist
+from insmeta.model import Insta
+from sinaspider.model import Artist as WeiboArtist
+from sinaspider.model import Weibo
+from twimeta.model import Artist as TwiArtist
+from twimeta.model import Twitter
+
 from imgmeta import console
 from imgmeta.helper import get_addr
-import sinaspider.exceptions
-import questionary
 
 
 def gen_xmp_info(meta) -> dict:
@@ -16,7 +20,7 @@ def gen_xmp_info(meta) -> dict:
     user_id = meta.get('XMP:ImageSupplierID')
     unique_id = meta.get('XMP:ImageUniqueID')
     sn = meta.get('XMP:SeriesNumber')
-    raw_filename = meta.get('XMP:RawFileName', '')
+    raw_filename = meta.get('XMP:RawFileName') or meta['File:FileName']
     res = {}
     match supplier.lower():
         case 'weibo':

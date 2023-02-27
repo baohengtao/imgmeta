@@ -5,6 +5,7 @@ from typing import List
 
 from exiftool import ExifToolHelper
 from typer import Option, Typer
+
 from imgmeta import console, get_progress
 from imgmeta.helper import diff_meta2, get_img_path, show_diff
 from imgmeta.meta import ImageMetaUpdate, rename_single_img
@@ -26,13 +27,23 @@ def write_meta(
           get_progress(disable=prompt) as progress):
 
         for img in progress.track(list(imgs), description='writing meta...'):
-            meta = et.get_metadata(img)[0]
-            xmp_info = ImageMetaUpdate(meta, prompt, time_fix).process_meta()
-            if to_write := diff_meta2(xmp_info, meta):
-                et.set_tags(img, to_write)
-                console.log(img, style='bold')
-                show_diff(xmp_info, meta)
-                console.log()
+            try:
+                meta = et.get_metadata(img)[0]
+                xmp_info = ImageMetaUpdate(
+                    meta, prompt, time_fix).process_meta()
+                if to_write := diff_meta2(xmp_info, meta):
+                    et.set_tags(img, to_write)
+                    console.log(img, style='bold')
+                    show_diff(xmp_info, meta)
+                    console.log()
+            except Exception as e:
+                Path('./problem').mkdir(exist_ok=True)
+                new_img = Path('./problem')/img.name
+                if new_img != img:
+                    assert not new_img.exists()
+                    img.rename(new_img)
+                console.log(f'{e}: {img}', style='error')
+                console.log(f'{img} moved to {new_img}', style='error')
 
 
 @app.command(help='Rename imgs and videos')
