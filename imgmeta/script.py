@@ -48,6 +48,34 @@ def write_meta(
                 console.log(f'{img} moved to {new_img}', style='error')
 
 
+@app.command()
+def write_ins():
+    stogram = Path.home()/'Pictures/4K Stogram'
+    dst_path = Path.home()/'Pictures/Instagram'
+    imgs = list(get_img_path(stogram))
+    with (ExifToolHelper() as et, get_progress() as progress):
+        for img in progress.track(imgs):
+            meta = et.get_metadata(img)[0]
+            patch = {
+                "XMP:ImageSupplierName": "Instagram",
+                "EXIF:UserComment": "",
+                "EXIF:ImageDescription": "",
+                "EXIF:Artist": "",
+            }
+            xmp_info = ImageMetaUpdate(meta | patch).process_meta()
+            xmp_info |= patch
+            if to_write := diff_meta(xmp_info, meta):
+                et.set_tags(img, to_write)
+                console.log(img, style='bold')
+                show_diff(xmp_info, meta)
+            dst_path.mkdir(exist_ok=True)
+            new_img = dst_path / img.name
+            assert not (new_img).exists()
+            img.rename(new_img)
+            console.log(
+                f'moved {img} to {new_img}', style='bold')
+
+
 @app.command(help='Rename imgs and videos')
 def rename(paths: List[Path],
            new_dir: bool = Option(
