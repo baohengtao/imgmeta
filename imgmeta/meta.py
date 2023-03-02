@@ -244,12 +244,10 @@ class ImageMetaUpdate:
                 f"{self.meta.get('SourceFile')}: Multi values of src_meta "
                 f"=> {src_meta}", style='warning')
             return
-        src_value = src_values.pop()
-        dst_value = self.meta.get(dst_tag, '')
+        src_value = str(src_values.pop())
+        dst_value = str(self.meta.get(dst_tag, ''))
         if (dst_value != '' and dst_value != src_value):
             try:
-                assert isinstance(dst_value, str)
-                assert isinstance(src_value, str)
                 assert (dst_value and src_value)
                 src_value = self._deal_conflict(src_value, dst_value)
             except ValueError as e:

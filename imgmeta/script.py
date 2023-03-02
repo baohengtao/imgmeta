@@ -17,7 +17,8 @@ app = Typer()
 def write_meta(
         paths: List[Path],
         prompt: bool = False,
-        time_fix: bool = False):
+        time_fix: bool = False,
+        move_with_exception: bool = False):
     if not isinstance(paths, list):
         paths = [paths]
     imgs = itertools.chain.from_iterable(
@@ -39,6 +40,8 @@ def write_meta(
             except AssertionError as e:
                 raise
             except Exception as e:
+                if not move_with_exception:
+                    raise
                 Path('./problem').mkdir(exist_ok=True)
                 new_img = Path('./problem')/img.name
                 if new_img != img:
@@ -62,6 +65,7 @@ def write_ins():
                 "EXIF:ImageDescription": "",
                 "EXIF:Artist": "",
             }
+            patch = {k: v for k, v in patch.items() if v or k in meta}
             xmp_info = ImageMetaUpdate(meta | patch).process_meta()
             xmp_info |= patch
             if to_write := diff_meta(xmp_info, meta):
