@@ -31,6 +31,7 @@ def gen_xmp_info(meta) -> dict:
                     console.log(f"{meta['File:FileName']}=>{unique_id}:{e}")
                 else:
                     res |= wb.gen_meta(sn)
+                    assert wb.user_id == user_id
             if user_id:
                 artist = WeiboArtist.from_id(user_id)
                 res |= artist.xmp_info
@@ -51,11 +52,12 @@ def gen_xmp_info(meta) -> dict:
                 res |= InstaArtist.from_id(user_id).meta
 
         case 'twitter':
-            if user_text_id := meta.get('XMP:ImageCreatorName'):
-                if artist := TwiArtist.from_id(user_text_id):
-                    res |= artist.xmp_info
+            user_id = meta.get('XMP:ImageCreatorName')
             if unique_id and (twitter := Twitter.get_or_none(id=unique_id)):
                 res |= twitter.gen_meta(sn)
+                user_id = twitter.user_id
+            if user_id and (artist := TwiArtist.from_id(user_id)):
+                res |= artist.xmp_info
 
     return {k: str(v).strip() for k, v in res.items()}
 
