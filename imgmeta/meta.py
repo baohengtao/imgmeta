@@ -198,12 +198,11 @@ class ImageMetaUpdate:
                 self.meta[k] = ''
 
     def _assign_multi_tag(self, tag, tag_aux, value):
-        if value == '':
-            if (tag not in self.meta and
-                    tag_aux not in self.meta):
-                return
+
         v = self.meta.get(tag, '')
         v_aux = self.meta.get(tag_aux, '')
+        if v == v_aux == value:
+            return
         if v_aux and v != v_aux:
             console.log(
                 f"{self.filepath}: found unexpected tag {tag_aux}:{v_aux}",
@@ -216,13 +215,33 @@ class ImageMetaUpdate:
                 v_aux = ''
             else:
                 return
+        """
+        case 1: v_aux == v:
+            case 1.1: value != '' ==> update
+            case 1.2 value == ''
+        """
 
         to_update = {tag: value, tag_aux: value}
-        if v == v_aux or v == value:
+        if v == v_aux:
+            if value:
+                self.meta.update(to_update)
+            elif self.prompt:
+                console.log(
+                    f'[u b]{self.filepath}  {tag}[/u b]: discard {v}?')
+                if questionary.confirm('discard or not').unsafe_ask():
+                    self.meta.update(to_update)
+            return
+
+        """
+        case 2: v_aux == ''
+            case 2.1: v == value ==> update
+            case 2.2: v != value
+        """
+
+        if v == value:
             self.meta.update(to_update)
             return
-        else:
-            assert not v_aux
+
         console.log(
             f"{self.filepath}: {tag} {v} not equal {value} "
             f"and no {tag_aux} found.", style='info')
