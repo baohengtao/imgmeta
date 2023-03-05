@@ -138,6 +138,7 @@ class ImageMetaUpdate:
 
     def write_location(self):
         if lat_lng := self.meta.pop('InstagramLocation', None):
+            console.log('get loc from Instagram', style='info')
             lat, lng = lat_lng.split()
         elif not (location := self.meta.get('XMP:Location')):
             return

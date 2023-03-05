@@ -1,3 +1,4 @@
+import itertools
 import time
 from collections import defaultdict
 from pathlib import Path
@@ -8,6 +9,7 @@ import geopy
 import keyring
 from exiftool import ExifToolHelper
 from geopy import geocoders
+from geopy.distance import geodesic
 from peewee import DoubleField, Model, TextField
 from playhouse.postgres_ext import PostgresqlExtDatabase
 from playhouse.shortcuts import model_to_dict
@@ -50,14 +52,27 @@ class Geolocation(BaseModel):
             time.sleep(1)
             cls._addr_not_found.append(query)
             return
+        console.log(f'\nwrite geo_info: {addr.query, addr.address}\n')
+        lat, lng = cls.round_loc(addr.latitude, addr.longitude)
         addr = Geolocation.create(
             query=query,
             address=addr.address,
-            longitude=addr.longitude,
-            latitude=addr.latitude)
-        console.log(f'\nwrite geo_info: {addr.query, addr.address}\n')
+            latitude=lat,
+            longitude=lng)
         sleep(1.0)
         return addr
+
+    @staticmethod
+    def round_loc(lat, lng, tolerance=0.01):
+        for precision in itertools.count(start=1):
+            lat_, lng_ = round(lat, precision), round(lng, precision)
+            if (err := geodesic((lat, lng), (lat_, lng_)).meters) < tolerance:
+                break
+        if err:
+            console.log(
+                f'round loction: {lat, lng} -> {lat_, lng_}'
+                f'with precision {precision} (err: {err}m)')
+        return lat_, lng_
 
 
 def get_img_path(path: Path, sort=False, skip_dir=None) -> Iterator[Path]:
@@ -113,3 +128,6 @@ def show_diff(modified: dict, original: dict):
             console.log(f'+{k}: {v}', style='green')
         if k in original:
             console.log(f'-{k}: {original[k]}', style='red')
+        if k == 'XMP:Geography' and k in original:
+            dist = geodesic(original[k], v).meters
+            console.log(f'Location moved with {dist}m', style='warning')
