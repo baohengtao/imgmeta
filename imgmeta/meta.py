@@ -137,16 +137,16 @@ class ImageMetaUpdate:
         self.meta['XMP:RawFileName'] = raw_file_name or filename
 
     def write_location(self):
-        location = self.meta.get('XMP:Location')
-        if location == '无':
-            location = ''
-            self.meta['XMP:Location'] = location
-        if not location:
+        if lat_lng := self.meta.pop('InstagramLocation', None):
+            lat, lng = lat_lng.split()
+        elif not (location := self.meta.get('XMP:Location')):
             return
-        if not (addr := Geolocation.get_addr(location)):
+        elif not (addr := Geolocation.get_addr(location)):
             console.log(
                 f'{self.filename}=>Cannot locate {location}', style='warning')
             return
+        else:
+            lat, lng = addr.latitude, addr.longitude
         composite = self.meta.get('Composite:GPSPosition')
         geography = self.meta.get('XMP:Geography')
         if composite:
@@ -157,12 +157,9 @@ class ImageMetaUpdate:
                     f'{self.filepath}: distance between {composite} and {geography} is {dist}km',
                     style='warning')
                 return
-        # latitude = f"{addr.latitude:.7f}"
-        # longitude = f"{addr.longitude:.7f}"
-        # latitude, longitude = float(latitude), float(longitude)
-        self.meta['XMP:GPSLatitude'] = addr.latitude
-        self.meta['XMP:GPSLongitude'] = addr.longitude
-        self.meta['XMP:Geography'] = f'{addr.latitude} {addr.longitude}'
+        self.meta['XMP:GPSLatitude'] = lat
+        self.meta['XMP:GPSLongitude'] = lng
+        self.meta['XMP:Geography'] = f'{lat} {lng}'
 
     def move_meta(self):
         tuple_tag_to_move = [
