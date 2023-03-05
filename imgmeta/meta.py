@@ -13,7 +13,7 @@ from twimeta.model import Artist as TwiArtist
 from twimeta.model import Twitter
 
 from imgmeta import console
-from imgmeta.helper import Geolocation
+from imgmeta.model import Geolocation
 
 
 def gen_xmp_info(meta) -> dict:
