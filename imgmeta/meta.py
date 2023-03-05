@@ -12,7 +12,7 @@ from twimeta.model import Artist as TwiArtist
 from twimeta.model import Twitter
 
 from imgmeta import console
-from imgmeta.helper import get_addr
+from imgmeta.helper import Geolocation
 
 
 def gen_xmp_info(meta) -> dict:
@@ -142,7 +142,7 @@ class ImageMetaUpdate:
             self.meta['XMP:Location'] = location
         if not location:
             return
-        if not (address := get_addr(location)):
+        if not (address := Geolocation.get_addr(location)):
             console.log(
                 f'{self.filename}=>Cannot locate {location}', style='warning')
             return
