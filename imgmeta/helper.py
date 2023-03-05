@@ -45,7 +45,8 @@ class Geolocation(BaseModel):
             return
         try:
             addr = cls.locator.geocode(query, language='zh')
-        except geopy.exc.GeocoderUnavailable:
+            assert addr
+        except (geopy.exc.GeocoderUnavailable, AssertionError):
             time.sleep(1)
             cls._addr_not_found.append(query)
             return

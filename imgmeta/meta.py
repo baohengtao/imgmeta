@@ -1,6 +1,7 @@
 import re
 from pathlib import Path
 
+import geopy.distance
 import pendulum
 import questionary
 import sinaspider.exceptions
@@ -142,7 +143,7 @@ class ImageMetaUpdate:
             self.meta['XMP:Location'] = location
         if not location:
             return
-        if not (address := Geolocation.get_addr(location)):
+        if not (addr := Geolocation.get_addr(location)):
             console.log(
                 f'{self.filename}=>Cannot locate {location}', style='warning')
             return
@@ -151,20 +152,17 @@ class ImageMetaUpdate:
         if composite:
             if not geography:
                 return
-            com = [float(x) for x in composite.split()]
-            geo = [float(x) for x in geography.split()]
-            for x, y in zip(com, geo):
-                if x - y > 1e-9:
-                    console.log(
-                        f'{self.filename}:composite {composite} not eq'
-                        f'geography {geography}', style='warning')
-                    return
-        latitude = f"{address.latitude:.7f}"
-        longitude = f"{address.longitude:.7f}"
-        latitude, longitude = float(latitude), float(longitude)
-        self.meta['XMP:GPSLatitude'] = latitude
-        self.meta['XMP:GPSLongitude'] = longitude
-        self.meta['XMP:Geography'] = f'{latitude} {longitude}'
+            if (dist := geopy.distance.distance(composite, geography).km) > 1:
+                console.log(
+                    f'{self.filepath}: distance between {composite} and {geography} is {dist}km',
+                    style='warning')
+                return
+        # latitude = f"{addr.latitude:.7f}"
+        # longitude = f"{addr.longitude:.7f}"
+        # latitude, longitude = float(latitude), float(longitude)
+        self.meta['XMP:GPSLatitude'] = addr.latitude
+        self.meta['XMP:GPSLongitude'] = addr.longitude
+        self.meta['XMP:Geography'] = f'{addr.latitude} {addr.longitude}'
 
     def move_meta(self):
         tuple_tag_to_move = [
