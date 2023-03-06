@@ -3,7 +3,6 @@ import time
 from time import sleep
 from typing import Self
 
-import geopy
 import keyring
 from geopy import geocoders
 from geopy.distance import geodesic
@@ -30,7 +29,7 @@ class Geolocation(BaseModel):
     longitude = DoubleField()
     latitude = DoubleField()
 
-    _addr_not_found = []
+    _addr_not_found = set()
     locator = geocoders.GoogleV3(
         api_key=keyring.get_password("google_map", "api_key"))
 
@@ -40,14 +39,11 @@ class Geolocation(BaseModel):
             return addr
         elif query in cls._addr_not_found:
             return
-        try:
-            addr = cls.locator.geocode(query, language='zh')
-            assert addr
-        except (geopy.exc.GeocoderUnavailable, AssertionError):
+        if not (addr := cls.locator.geocode(query, language='zh')):
+            cls._addr_not_found.add(query)
             time.sleep(1)
-            cls._addr_not_found.append(query)
             return
-        console.log(f'\nwrite geo_info: {addr.query, addr.address}\n')
+        console.log(f'\nwrite geo_info: {query, addr.address}\n')
         lat, lng = cls.round_loc(addr.latitude, addr.longitude)
         addr = Geolocation.create(
             query=query,

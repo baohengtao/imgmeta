@@ -63,4 +63,6 @@ def show_diff(modified: dict, original: dict):
             console.log(f'-{k}: {original[k]}', style='red')
         if k == 'XMP:Geography' and k in original:
             dist = geodesic(original[k], v).meters
-            console.log(f'Location moved with {dist}m', style='warning')
+            location = modified["XMP:Location"]
+            console.log(
+                f'Location {location} moved with {dist}m', style='warning')
