@@ -60,7 +60,7 @@ def gen_xmp_info(meta) -> dict:
             if user_id and (artist := TwiArtist.from_id(user_id)):
                 res |= artist.xmp_info
 
-    return {k: str(v).strip() for k, v in res.items()}
+    return res
 
 
 def rename_single_img(img: Path, meta: dict, new_dir=False, root=None):
@@ -137,16 +137,21 @@ class ImageMetaUpdate:
         self.meta['XMP:RawFileName'] = raw_file_name or filename
 
     def write_location(self):
+        if self.meta.get('XMP:Subject') == 'NoInstagramLocation':
+            self.meta['XMP:Subject'] = ''
+
         if lat_lng := self.meta.pop('InstagramLocation', None):
-            console.log('get loc from Instagram', style='info')
-            lat, lng = lat_lng.split()
-        elif not (location := self.meta.get('XMP:Location')):
-            return
-        elif not (addr := Geolocation.get_addr(location)):
-            console.log(
-                f'{self.filename}=>Cannot locate {location}', style='warning')
-            return
+            lat, lng = lat_lng
+            if lat is None:
+                self.meta['XMP:Subject'] = 'NoInstagramLocation'
+                return
         else:
+            if not (location := self.meta.get('XMP:Location')):
+                return
+            if not (addr := Geolocation.get_addr(location)):
+                console.log(
+                    f'{self.filename}=>Cannot locate {location}', style='warning')
+                return
             lat, lng = addr.latitude, addr.longitude
         composite = self.meta.get('Composite:GPSPosition')
         geography = self.meta.get('XMP:Geography')
