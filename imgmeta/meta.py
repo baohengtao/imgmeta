@@ -149,9 +149,11 @@ class ImageMetaUpdate:
             if not (location := self.meta.get('XMP:Location')):
                 return
             if not (addr := Geolocation.get_addr(location)):
-                console.log(
-                    f'{self.filename}=>Cannot locate {location}', style='warning')
-                return
+                city, *_ = location.split('·', maxsplit=1)
+                if not (addr := Geolocation.get_addr(city)):
+                    console.log(
+                        f'{self.filename}=>Cannot locate {location}', style='warning')
+                    return
             lat, lng = addr.latitude, addr.longitude
         composite = self.meta.get('Composite:GPSPosition')
         geography = self.meta.get('XMP:Geography')
@@ -187,7 +189,8 @@ class ImageMetaUpdate:
         mp4_tag_to_copy = [
             ('XMP:DateCreated', 'QuickTime:CreateDate'),
             ('XMP:Title', 'QuickTime:Title'),
-            ('XMP:Description', 'QuickTime:Description')
+            ('XMP:Description', 'QuickTime:Description'),
+            ('XMP:Geography', 'Keys:GPSCoordinates')
         ]
         if self.meta['File:MIMEType'] in ['video/mp4', 'video/quicktime']:
             for src_tag, dst_tag in mp4_tag_to_copy:
