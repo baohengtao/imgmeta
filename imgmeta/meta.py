@@ -140,6 +140,10 @@ class ImageMetaUpdate:
             self.meta['XMP:Subject'] = ''
 
         if lat_lng := self.meta.pop('InstagramLocation', None):
+            if lat_lng == 'not_found':
+                if 'XMP:Location' in self.meta:
+                    self.meta['XMP:Location'] = ''
+                return
             lat, lng = lat_lng
             if lat is None:
                 self.meta['XMP:Subject'] = 'NoInstagramLocation'
