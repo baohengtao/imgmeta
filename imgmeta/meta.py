@@ -115,10 +115,9 @@ class ImageMetaUpdate:
                     assert v
             xmp_info = {k: v for k, v in xmp_info.items() if v != ''}
             self.meta.update(xmp_info)
+        self.move_meta()
         self.write_location()
         self.assign_raw_file_name()
-
-        self.move_meta()
         description = gen_description(self.meta)
         title = gen_title(self.meta)
         self._assign_multi_tag('XMP:Title', 'XMP:Caption', title)
@@ -152,7 +151,7 @@ class ImageMetaUpdate:
                 city, *_ = location.split('·', maxsplit=1)
                 if not (addr := Geolocation.get_addr(city)):
                     console.log(
-                        f'{self.filename}=>Cannot locate {location}', style='warning')
+                        f'{self.filepath}=>Cannot locate {location}', style='warning')
                     return
             lat, lng = addr.latitude, addr.longitude
         composite = self.meta.get('Composite:GPSPosition')
@@ -181,6 +180,8 @@ class ImageMetaUpdate:
             ('EXIF:CreateDate', 'XMP:DateCreated'),
             (':Title', 'XMP:Title'),
             (':Description', 'XMP:Description'),
+            ('Keys:GPSCoordinates', 'XMP:Geography'),
+            ('QuickTime:Keywords', 'XMP:Subject')
         ]
         for src_tag, dst_tag in tuple_tag_to_move:
             self.transfer_tag(src_tag, dst_tag)
@@ -190,7 +191,8 @@ class ImageMetaUpdate:
             ('XMP:DateCreated', 'QuickTime:CreateDate'),
             ('XMP:Title', 'QuickTime:Title'),
             ('XMP:Description', 'QuickTime:Description'),
-            ('XMP:Geography', 'Keys:GPSCoordinates')
+            ('XMP:Geography', 'Keys:GPSCoordinates'),
+            ('XMP:Subject', 'QuickTime:Keywords')
         ]
         if self.meta['File:MIMEType'] in ['video/mp4', 'video/quicktime']:
             for src_tag, dst_tag in mp4_tag_to_copy:
