@@ -268,14 +268,15 @@ class ImageMetaUpdate:
         assert (src_tag != dst_tag)
         src_meta = {k: v for k, v in self.meta.items(
         ) if k.endswith(src_tag) and k != dst_tag and v != ''}
-        if not (src_values := set(src_meta.values())):
+        if not (src_values := list(src_meta.values())):
             return
-        if len(src_values) > 1:
-            console.log(
-                f"{self.meta.get('SourceFile')}: Multi values of src_meta "
-                f"=> {src_meta}", style='warning')
-            return
-        src_value = str(src_values.pop())
+        src_value = src_values[0]
+        for v in src_values[1:]:
+            if v != src_value:
+                console.log(
+                    f"{self.filepath}: Multi values of src_meta "
+                    f"=> {src_meta}", style='warning')
+                return
         dst_value = str(self.meta.get(dst_tag, ''))
         if (dst_value != '' and dst_value != src_value):
             try:

@@ -3,7 +3,7 @@ from collections import defaultdict
 from pathlib import Path
 from typing import List
 
-from exiftool import ExifToolHelper
+from exiftool import ExifTool, ExifToolHelper
 from typer import Option, Typer
 
 from imgmeta import console, get_progress
@@ -25,11 +25,13 @@ def write_meta(
         get_img_path(p, sort=False) for p in paths)
 
     with (ExifToolHelper() as et,
+          ExifTool(common_args=['-G1', '-n']) as etl,
           get_progress(disable=prompt) as progress):
 
         for img in progress.track(list(imgs), description='writing meta...'):
             try:
                 meta = et.get_metadata(img)[0]
+                meta |= etl.execute_json(str(img), '-Keys:GPSCoordinates')[0]
                 xmp_info = ImageMetaUpdate(
                     meta, prompt, time_fix).process_meta()
                 if to_write := diff_meta(xmp_info, meta):
