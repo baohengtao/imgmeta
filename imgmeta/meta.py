@@ -182,6 +182,8 @@ class ImageMetaUpdate:
             (':UserComment', 'XMP:UserComment'),
             (':ImageUnique', 'XMP:ImageUniqueID'),
             ('EXIF:CreateDate', 'XMP:DateCreated'),
+            ('XMP:CreateDate', 'XMP:DateCreated'),
+            ('QuickTime:CreateDate', 'XMP:DateCreated'),
             (':Title', 'XMP:Title'),
             (':Description', 'XMP:Description'),
             ('Keys:GPSCoordinates', 'XMP:Geography'),

@@ -9,7 +9,7 @@ from imgmeta import console
 
 
 def get_img_path(path: Path, sort=False, skip_dir=None) -> Iterator[Path]:
-    media_ext = ('.jpg', '.mov', '.png', '.jpeg', '.mp4', '.gif')
+    media_ext = ('.jpg', '.mov', '.png', '.jpeg', '.mp4', '.gif', '.heic')
     files = []
     paths = [path] if path.is_file() else path.iterdir()
     for p in paths:

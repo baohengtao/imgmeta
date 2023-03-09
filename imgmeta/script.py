@@ -4,6 +4,7 @@ from pathlib import Path
 from typing import List
 
 from exiftool import ExifTool, ExifToolHelper
+from exiftool.exceptions import ExifToolExecuteError
 from typer import Option, Typer
 
 from imgmeta import console, get_progress
@@ -35,13 +36,12 @@ def write_meta(
                 xmp_info = ImageMetaUpdate(
                     meta, prompt, time_fix).process_meta()
                 if to_write := diff_meta(xmp_info, meta):
-                    et.set_tags(img, to_write)
+                    et.set_tags(img, to_write, params=['-ignoreMinorErrors'])
                     console.log(img, style='bold')
                     show_diff(xmp_info, meta)
                     console.log()
-            except AssertionError as e:
-                raise
-            except Exception as e:
+            except ExifToolExecuteError as e:
+                console.log(e.stdout, e.stderr, e.cmd, style='error')
                 if not move_with_exception:
                     raise
                 Path('./problem').mkdir(exist_ok=True)
