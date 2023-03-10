@@ -18,6 +18,10 @@ def get_img_path(path: Path, sort=False, skip_dir=None) -> Iterator[Path]:
         elif p.is_file():
             if not p.suffix.lower().endswith(media_ext):
                 continue
+            p_strip = p.parent/(p.name.lstrip())
+            if p != p_strip:
+                assert not p_strip.exists()
+                p = p.rename(p_strip)
             files.append(p)
         elif p.is_dir():
             if skip_dir and skip_dir in p.stem:
