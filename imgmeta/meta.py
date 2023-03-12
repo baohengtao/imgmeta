@@ -168,6 +168,9 @@ class ImageMetaUpdate:
                     f'{self.filepath}: distance between {composite} and {geography} is {dist}km',
                     style='warning')
                 return
+        if 'Keys:GPSCoordinates' in self.meta:
+            if self.meta['Keys:GPSCoordinates'] == self.meta.get('XMP:Geography', ''):
+                self.meta['Keys:GPSCoordinates'] = ''
         self.meta['XMP:GPSLatitude'] = lat
         self.meta['XMP:GPSLongitude'] = lng
         self.meta['XMP:Geography'] = f'{lat} {lng}'
@@ -186,7 +189,7 @@ class ImageMetaUpdate:
             ('QuickTime:CreateDate', 'XMP:DateCreated'),
             (':Title', 'XMP:Title'),
             (':Description', 'XMP:Description'),
-            ('Keys:GPSCoordinates', 'XMP:Geography'),
+            # ('Keys:GPSCoordinates', 'XMP:Geography'),
             ('QuickTime:Keywords', 'XMP:Subject')
         ]
         for src_tag, dst_tag in tuple_tag_to_move:
