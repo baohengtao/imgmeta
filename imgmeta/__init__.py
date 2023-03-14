@@ -18,7 +18,7 @@ __version__ = '0.3.0'
 traceback.install(show_locals=True, suppress=[typer, click])
 custom_theme = Theme({
     "info": "dim cyan",
-    "warning": "bold bright_yellow on dark_orange",
+    "warning": "bold yellow on dark_red",
     "error": "bold bright_red on dark_red",
     "notice": "bold magenta"
 })

@@ -59,6 +59,9 @@ def gen_xmp_info(meta) -> dict:
                 user_id = twitter.user_id
             if user_id and (artist := TwiArtist.from_id(user_id)):
                 res |= artist.xmp_info
+    for v in res.values():
+        if isinstance(v, str):
+            assert v.strip() == v
 
     return res
 
@@ -136,7 +139,7 @@ class ImageMetaUpdate:
         self.meta['XMP:RawFileName'] = raw_file_name or filename
 
     def write_location(self):
-        if self.meta.get('XMP:Subject') == 'NoInstagramLocation':
+        if self.meta.get('XMP:Subject') in ['NoInstagramLocation', 'NoWeiboLocation']:
             self.meta['XMP:Subject'] = ''
 
         if lat_lng := self.meta.pop('InstagramLocation', None):
@@ -148,9 +151,16 @@ class ImageMetaUpdate:
             if lat is None:
                 self.meta['XMP:Subject'] = 'NoInstagramLocation'
                 return
+        elif lat_lng := self.meta.pop('WeiboLocation', None):
+            lat, lng = lat_lng
+            if lat is None:
+                self.meta['XMP:Subject'] = 'NoWeiboLocation'
+                return
         else:
             if not (location := self.meta.get('XMP:Location')):
                 return
+            else:
+                assert False
             if not (addr := Geolocation.get_addr(location)):
                 city, *_ = location.split('·', maxsplit=1)
                 if not (addr := Geolocation.get_addr(city)):

@@ -19,7 +19,8 @@ def write_meta(
         paths: List[Path],
         prompt: bool = False,
         time_fix: bool = False,
-        move_with_exception: bool = False):
+        move_with_exception: bool = False,
+        max_write: int = None):
     if not isinstance(paths, list):
         paths = [paths]
     imgs = itertools.chain.from_iterable(
@@ -29,6 +30,8 @@ def write_meta(
           ExifTool(common_args=['-G1', '-n']) as etl,
           get_progress(disable=prompt) as progress):
 
+        count = 0
+
         for img in progress.track(list(imgs), description='writing meta...'):
             try:
                 meta = et.get_metadata(img)[0]
@@ -36,10 +39,13 @@ def write_meta(
                 xmp_info = ImageMetaUpdate(
                     meta, prompt, time_fix).process_meta()
                 if to_write := diff_meta(xmp_info, meta):
+
                     et.set_tags(img, to_write, params=['-ignoreMinorErrors'])
                     console.log(img, style='bold')
                     show_diff(xmp_info, meta)
                     console.log()
+                    if max_write and (count := count + 1) >= max_write:
+                        break
             except ExifToolExecuteError as e:
                 console.log(e.stdout, e.stderr, e.cmd, style='error')
                 if not move_with_exception:
