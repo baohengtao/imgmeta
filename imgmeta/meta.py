@@ -216,6 +216,13 @@ class ImageMetaUpdate:
         if self.meta['File:MIMEType'] in ['video/mp4', 'video/quicktime']:
             for src_tag, dst_tag in mp4_tag_to_copy:
                 self.transfer_tag(src_tag, dst_tag, is_move=False)
+            create_date = self.meta['QuickTime:CreateDate']
+            if create_date == self.meta['XMP:DateCreated']:
+                assert not create_date.endswith('+08:00')
+                create_date = pendulum.parse(
+                    create_date, tz='local').in_tz('UTC')
+                self.meta['QuickTime:CreateDate'] = create_date.format(
+                    'YYYY:MM:DD HH:mm:ss')
 
     def fix_meta(self):
 

@@ -59,7 +59,6 @@ def write_meta(
                 console.log(f'{img} moved to {new_img}', style='error')
 
 
-@app.command()
 def write_ins():
     stogram = Path.home()/'Pictures/4K Stogram'
     dst_path = Path.home()/'Pictures/Instagram'

@@ -39,7 +39,8 @@ def _sort_img(imgs: list[Path]) -> Iterator[Path]:
     imgs_dict = defaultdict(list)
     for tag in tags:
         imgs_dict[tag.get('XMP:ImageUniqueID')].append(tag['SourceFile'])
-    for value in sorted(imgs_dict.values(), key=lambda x: -len(x)):
+    for _, value in sorted(imgs_dict.items(),
+                           key=lambda x: (-len(x[1]), x[0])):
         for img in sorted(value):
             yield Path(img)
 
