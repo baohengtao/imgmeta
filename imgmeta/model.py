@@ -20,7 +20,8 @@ class BaseModel(Model):
 
     def __str__(self):
         model = model_to_dict(self, recurse=False)
-        return "\n".join(f'{k}: {v}' for k, v in model.items() if v is not None)
+        return "\n".join(f'{k}: {v}' for k, v in model.items()
+                         if v is not None)
 
 
 class Geolocation(BaseModel):

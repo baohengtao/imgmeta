@@ -85,7 +85,8 @@ def rename_single_img(img: Path, meta: dict, new_dir=False, root=None):
         filename += f'-{int(sn):d}' if sn else ''
         filename += img.suffix
         if new_dir:
-            path = Path(root)/artist if root else Path(artist)
+            subfolder = '_mp4' if filename.endswith('.mp4') else artist
+            path = Path(root)/subfolder if root else Path(subfolder)
             path.mkdir(exist_ok=True, parents=True)
         else:
             path = img.parent
@@ -288,7 +289,7 @@ class ImageMetaUpdate:
 
     def transfer_tag(self, src_tag, dst_tag, is_move=True):
         assert (src_tag != dst_tag)
-        src_meta = {k: v for k, v in self.meta.items(
+        src_meta = {k: str(v) for k, v in self.meta.items(
         ) if k.endswith(src_tag) and k != dst_tag and v != ''}
         if not (src_values := list(src_meta.values())):
             return

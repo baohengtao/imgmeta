@@ -1,4 +1,5 @@
 import itertools
+import shutil
 from collections import defaultdict
 from pathlib import Path
 from typing import List
@@ -59,9 +60,13 @@ def write_meta(
                 console.log(f'{img} moved to {new_img}', style='error')
 
 
+@app.command()
 def write_ins():
+    from insmeta.model import Artist as InsArtist
     stogram = Path.home()/'Pictures/4K Stogram'
-    dst_path = Path.home()/'Pictures/Instagram'
+    if not (p := Path('/Volumes/Art')).exists():
+        p = Path.home()/'Pictures'
+    dst_path = p/'Instagram'
     imgs = list(get_img_path(stogram))
     with (ExifToolHelper() as et, get_progress() as progress):
         for img in progress.track(imgs):
@@ -79,10 +84,18 @@ def write_ins():
                 et.set_tags(img, to_write)
                 console.log(img, style='bold')
                 show_diff(xmp_info, meta)
-            dst_path.mkdir(exist_ok=True)
-            new_img = dst_path / img.name
+
+            if (uid := xmp_info.get('XMP:ImageSupplierID')) is None:
+                img_path = dst_path / 'None'
+            elif InsArtist.get(user_id=uid).photos_num == 0:
+                img_path = dst_path / 'New'
+            else:
+                img_path = dst_path / 'User'
+
+            img_path.mkdir(exist_ok=True, parents=True)
+            new_img = img_path / img.name
             assert not (new_img).exists()
-            img.rename(new_img)
+            shutil.move(img, new_img)
             console.log(
                 f'moved {img} to {new_img}', style='bold')
 
@@ -100,6 +113,27 @@ def rename(paths: List[Path],
         for img in progress.track(list(imgs), description='renaming imgs...'):
             meta = et.get_metadata(img)[0]
             rename_single_img(img, meta, new_dir, root)
+
+
+@app.command(help='Rename imgs and videos for Ins Photo')
+def rename_ins(paths: List[Path],
+               new_dir: bool = Option(
+               False, '--new-dir', '-d', help='whether make new dir')):
+    from insmeta.model import Artist as InsArtist
+    if not isinstance(paths, list):
+        paths = [paths]
+    imgs = itertools.chain.from_iterable(
+        get_img_path(p, sort=True) for p in paths)
+    with (get_progress() as progress, ExifToolHelper() as et):
+        for img in progress.track(list(imgs), description='renaming imgs...'):
+            meta = et.get_metadata(img)[0]
+            if (uid := meta.get('XMP:ImageSupplierID')) is None:
+                subfolder = 'None'
+            elif InsArtist.get(user_id=uid).photos_num == 0:
+                subfolder = 'New'
+            else:
+                subfolder = 'User'
+            rename_single_img(img, meta, new_dir, root=subfolder)
 
 
 @app.command()
