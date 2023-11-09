@@ -66,7 +66,8 @@ def gen_xmp_info(meta) -> dict:
     return res
 
 
-def rename_single_img(img: Path, meta: dict, new_dir=False, root=None):
+def rename_single_img(img: Path, meta: dict, new_dir=False,
+                      root=None, sep_mp4: bool = True):
     raw_file_name = meta.get('XMP:RawFileName')
     artist = meta.get('XMP:Artist') or meta.get(
         'XMP:ImageCreatorName')
@@ -85,7 +86,10 @@ def rename_single_img(img: Path, meta: dict, new_dir=False, root=None):
         filename += f'-{int(sn):d}' if sn else ''
         filename += img.suffix
         if new_dir:
-            subfolder = '_mp4' if filename.endswith('.mp4') else artist
+            if sep_mp4 and filename.endswith('.mp4'):
+                subfolder = '_mp4'
+            else:
+                subfolder = artist
             path = Path(root)/subfolder if root else Path(subfolder)
             path.mkdir(exist_ok=True, parents=True)
         else:

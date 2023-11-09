@@ -40,8 +40,12 @@ def write_meta(
                 xmp_info = ImageMetaUpdate(
                     meta, prompt, time_fix).process_meta()
                 if to_write := diff_meta(xmp_info, meta):
+                    for k, v in to_write.copy().items():
+                        if isinstance(v, str):
+                            to_write[k] = v.replace('\n', '&#x0a;')
 
-                    et.set_tags(img, to_write, params=['-ignoreMinorErrors'])
+                    et.set_tags(img, to_write, params=[
+                                '-ignoreMinorErrors', '-escapeHTML'])
                     console.log(img, style='bold')
                     show_diff(xmp_info, meta)
                     console.log()
@@ -131,9 +135,12 @@ def rename_ins(paths: List[Path],
                 subfolder = 'None'
             elif InsArtist.get(user_id=uid).photos_num == 0:
                 subfolder = 'New'
+                sep_mp4 = False
             else:
                 subfolder = 'User'
-            rename_single_img(img, meta, new_dir, root=subfolder)
+                sep_mp4 = True
+            rename_single_img(img, meta, new_dir,
+                              root=subfolder, sep_mp4=sep_mp4)
 
 
 @app.command()
