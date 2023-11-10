@@ -362,12 +362,12 @@ def gen_title(meta):
         return ''
     if not time:
         return artist
-    time = re.split('[: ]', time)
-    year, month, day, *_ = time
-    year = year[-2:]
-    title = '-'.join([artist, year, month, day])
+    fmt = "YYYY:MM:DD HH:mm:ss"
+    time = pendulum.from_format(time[:len(fmt)], fmt)
     if sn:
-        title = f'{title}-{sn}'
+        title = f'{artist}-{time:%y-%m-%d-%H%M}-{sn}'
+    else:
+        title = f'{artist}-{time:%y-%m-%d}'
     return title
 
 
