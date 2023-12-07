@@ -1,12 +1,14 @@
 import itertools
 import shutil
-from collections import defaultdict
 from pathlib import Path
 from typing import List
 
 from exiftool import ExifTool, ExifToolHelper
 from exiftool.exceptions import ExifToolExecuteError
+from photosinfo.model import Girl
+from playhouse.shortcuts import model_to_dict
 from typer import Option, Typer
+from typing_extensions import Annotated
 
 from imgmeta import console, get_progress
 from imgmeta.helper import diff_meta, get_img_path, show_diff
@@ -106,43 +108,40 @@ def write_ins():
 
 @app.command(help='Rename imgs and videos')
 def rename(paths: List[Path],
-           new_dir: bool = Option(
-               False, '--new-dir', '-d', help='whether make new dir'),
-           root: Path = Option(None),
-           sep_mp4: bool = Option(False, '--sep-mp4', '-s'),
-           sep_mov: bool = Option(False, '--sep-mov', '-m')
+           new_dir: Annotated[bool, Option(
+               '--new-dir/--no-new-dir', '-d/-D')] = False,
+           root: Path = None,
+           sep_mp4: Annotated[bool, Option('--sep-mp4', '-s')] = False,
+           sep_mov: Annotated[bool, Option('--sep-mov', '-m')] = False,
+           sep_new: Annotated[bool, Option('--sep-new', '-n')] = False
            ):
+    assert not (sep_new and root)
     if not isinstance(paths, list):
         paths = [paths]
     imgs = itertools.chain.from_iterable(
         get_img_path(p, sort=True) for p in paths)
+    new_ids = {}
+    for girl in Girl:
+        girl_dict = model_to_dict(girl)
+        for col in ['sina', 'red', 'inst']:
+            if uid := girl_dict[f'{col}_id']:
+                assert uid not in new_ids
+                new_ids[uid] = girl_dict[f'{col}_num']
+    old_ids = {uid for uid, num in new_ids.items() if num > 0}
+
     with (get_progress() as progress, ExifToolHelper() as et):
         for img in progress.track(list(imgs), description='renaming imgs...'):
             if img.suffix == '.mov' and sep_mov:
                 continue
             meta = et.get_metadata(img)[0]
-            rename_single_img(img, meta, new_dir, root, sep_mp4, sep_mov)
-
-
-@app.command(help='Rename imgs and videos for Ins Photo')
-def rename_ins(paths: List[Path],
-               new_dir: bool = Option(
-               False, '--new-dir', '-d', help='whether make new dir')):
-    from insmeta.model import Artist as InsArtist
-    if not isinstance(paths, list):
-        paths = [paths]
-    imgs = itertools.chain.from_iterable(
-        get_img_path(p, sort=True) for p in paths)
-    with (get_progress() as progress, ExifToolHelper() as et):
-        for img in progress.track(list(imgs), description='renaming imgs...'):
-            meta = et.get_metadata(img)[0]
             if (uid := meta.get('XMP:ImageSupplierID')) is None:
                 subfolder = 'None'
-            elif InsArtist.get(user_id=uid).photos_num == 0:
-                subfolder = 'New'
-                sep_mp4 = False
-            else:
+            elif uid in old_ids:
                 subfolder = 'User'
-                sep_mp4 = True
-            rename_single_img(img, meta, new_dir,
-                              root=subfolder, sep_mp4=sep_mp4)
+            else:
+                subfolder = 'New'
+            if sep_new:
+                root = subfolder
+                sep_mp4 = (subfolder == 'User')
+
+            rename_single_img(img, meta, new_dir, root, sep_mp4, sep_mov)
