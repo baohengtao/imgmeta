@@ -7,6 +7,8 @@ import questionary
 import sinaspider.exceptions
 from insmeta.model import Artist as InstaArtist
 from insmeta.model import Insta
+from redbook.model import Artist as RedArtist
+from redbook.model import Note
 from sinaspider.model import Artist as WeiboArtist
 from sinaspider.model import Weibo
 from twimeta.model import Artist as TwiArtist
@@ -36,6 +38,14 @@ def gen_xmp_info(meta) -> dict:
             if user_id:
                 artist = WeiboArtist.from_id(user_id)
                 res |= artist.xmp_info
+        case 'redbook':
+            if unique_id:
+                note = Note.from_id(unique_id)
+                res |= note.gen_meta(sn)
+            if user_id:
+                artist = RedArtist.from_id(user_id)
+                res |= artist.xmp_info
+
         case 'instagram':
             from insmeta.model import get_id_from_filename
             if unique_id:

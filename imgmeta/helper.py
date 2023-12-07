@@ -9,7 +9,8 @@ from imgmeta import console
 
 
 def get_img_path(path: Path, sort=False, skip_dir=None) -> Iterator[Path]:
-    media_ext = ('.jpg', '.mov', '.png', '.jpeg', '.mp4', '.gif', '.heic')
+    media_ext = ('.jpg', '.mov', '.png', '.jpeg',
+                 '.mp4', '.gif', '.heic', '.webp')
     files = []
     paths = [path] if path.is_file() else path.iterdir()
     for p in paths:
@@ -40,7 +41,7 @@ def _sort_img(imgs: list[Path]) -> Iterator[Path]:
     for tag in tags:
         imgs_dict[tag.get('XMP:ImageUniqueID')].append(tag['SourceFile'])
     for _, value in sorted(imgs_dict.items(),
-                           key=lambda x: (-len(x[1]), x[0])):
+                           key=lambda x: (-len(x[1]), x[0] or '')):
         for img in sorted(value):
             yield Path(img)
 
@@ -50,9 +51,13 @@ def diff_meta(modified: dict, original: dict):
     to_write = {}
     for k, v in modified.items():
         if k in original:
-            if str(v) == str(original[k]) or v == original[k]:
-                continue
+            if (o := original[k]) != '':
+                if str(v) == str(o) or v == o:
+                    continue
         assert k in original or v
+        if k.startswith('ICC_Profile'):
+            assert v == ''
+            continue
         to_write[k] = v
     return to_write
 
