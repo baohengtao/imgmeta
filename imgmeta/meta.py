@@ -69,6 +69,7 @@ def gen_xmp_info(meta) -> dict:
                 user_id = twitter.user_id
             if user_id and (artist := TwiArtist.from_id(user_id)):
                 res |= artist.xmp_info
+
     for v in res.values():
         if isinstance(v, str):
             assert v.strip() == v
@@ -77,7 +78,8 @@ def gen_xmp_info(meta) -> dict:
 
 
 def rename_single_img(img: Path, meta: dict, new_dir=False,
-                      root=None, sep_mp4: bool = True):
+                      root=None, sep_mp4: bool = True,
+                      sep_mov: bool = False,):
     raw_file_name = meta.get('XMP:RawFileName')
     artist = meta.get('XMP:Artist') or meta.get(
         'XMP:ImageCreatorName')
@@ -90,16 +92,27 @@ def rename_single_img(img: Path, meta: dict, new_dir=False,
     fmt = 'YYYY:MM:DD HH:mm:ss.SSSSSS'
     date = pendulum.from_format(date, fmt=fmt[:len(date)])
     inc = 0
+    mov = None
+    if sep_mov:
+        assert img.suffix != '.mov'
+        if (mov := img.with_suffix('.mov')).exists():
+            assert img.suffix == '.jpg'
+        else:
+            mov = None
     while True:
         filename = f'{artist}-{date:%y-%m-%d}'
         filename += f'-{inc:02d}' if inc else ''
         filename += f'-{int(sn):d}' if sn else ''
+        if 'edited' in img.name:
+            filename += '_edited'
         filename += img.suffix
-        if new_dir:
+        if new_dir or root:
             if sep_mp4 and filename.endswith('.mp4'):
                 subfolder = '_mp4'
             else:
                 subfolder = artist
+            if mov:
+                subfolder += '_mov'
             path = Path(root)/subfolder if root else Path(subfolder)
             path.mkdir(exist_ok=True, parents=True)
         else:
@@ -112,6 +125,10 @@ def rename_single_img(img: Path, meta: dict, new_dir=False,
             inc += 1
         else:
             img.rename(img_new)
+            if mov:
+                mov_new = img_new.with_suffix('.mov')
+                assert not mov_new.exists()
+                mov.rename(mov_new)
             console.log(f'move {img} to {img_new}')
             break
 
