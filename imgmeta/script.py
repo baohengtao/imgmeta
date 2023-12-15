@@ -1,4 +1,5 @@
 import itertools
+import os
 import shutil
 from pathlib import Path
 from typing import List
@@ -103,7 +104,7 @@ def write_ins():
             assert not (new_img).exists()
             shutil.move(img, new_img)
             console.log(
-                f'moved {img} to {new_img}', style='bold')
+                f'moving {img} to {new_img}...', style='bold')
 
 
 @app.command(help='Rename imgs and videos')
@@ -145,3 +146,25 @@ def rename(paths: List[Path],
                 sep_mp4 = (subfolder == 'User')
 
             rename_single_img(img, meta, new_dir, root, sep_mp4, sep_mov)
+
+
+@app.command(help='Clean files')
+def clean_file(path: Path):
+    media_ext = ('.jpg', '.mov', '.png', '.jpeg',
+                 '.mp4', '.gif', '.heic', '.webp')
+    fmt = {f'{ext}_original' for ext in media_ext}
+    assert path.is_dir()
+    for file in path.iterdir():
+        if file.is_dir():
+            clean_file(file)
+            continue
+        if (suf := file.suffix).endswith('_original'):
+            assert suf in fmt
+        elif file.name != '.DS_Store':
+            continue
+        console.log(f"removing {file}")
+        file.unlink()
+    if path == Path('.') or any(path.iterdir()):
+        return
+    console.log(f"removing {path}")
+    os.rmdir(path)
