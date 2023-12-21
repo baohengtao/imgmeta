@@ -4,13 +4,12 @@ from pathlib import Path
 import geopy.distance
 import pendulum
 import questionary
-import sinaspider.exceptions
 from insmeta.model import Artist as InstaArtist
 from insmeta.model import Insta
 from redbook.model import Artist as RedArtist
 from redbook.model import Note
 from sinaspider.model import Artist as WeiboArtist
-from sinaspider.model import Weibo
+from sinaspider.model import Weibo, WeiboMissed
 from twimeta.model import Artist as TwiArtist
 from twimeta.model import Twitter
 
@@ -28,13 +27,10 @@ def gen_xmp_info(meta) -> dict:
     match supplier.lower():
         case 'weibo':
             if unique_id:
-                try:
-                    wb = Weibo.from_id(unique_id)
-                except sinaspider.exceptions.WeiboNotFoundError as e:
-                    console.log(f"{meta['File:FileName']}=>{unique_id}:{e}")
-                else:
-                    res |= wb.gen_meta(sn)
-                    assert wb.user_id == user_id
+                wb = Weibo.get_or_none(
+                    bid=unique_id) or WeiboMissed.get(bid=unique_id)
+                res |= wb.gen_meta(sn)
+                assert wb.user_id == user_id
             if user_id:
                 artist = WeiboArtist.from_id(user_id)
                 res |= artist.xmp_info
