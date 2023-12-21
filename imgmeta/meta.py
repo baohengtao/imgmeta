@@ -76,17 +76,18 @@ def gen_xmp_info(meta) -> dict:
 def rename_single_img(img: Path, meta: dict, new_dir=False,
                       root=None, sep_mp4: bool = True,
                       sep_mov: bool = False,):
+    new_dir = new_dir or root or sep_mov or sep_mp4
     raw_file_name = meta.get('XMP:RawFileName')
     artist = meta.get('XMP:Artist') or meta.get(
         'XMP:ImageCreatorName')
     date = meta.get('XMP:DateCreated', '')
-    date = date.removesuffix('+08:00').removesuffix('.000000')
-    sn = meta.get('XMP:SeriesNumber')
     if not all([raw_file_name, artist, date]):
         console.log(img)
         return
     fmt = 'YYYY:MM:DD HH:mm:ss.SSSSSS'
+    date = date.removesuffix('+08:00').removesuffix('.000000')
     date = pendulum.from_format(date, fmt=fmt[:len(date)])
+    sn = meta.get('XMP:SeriesNumber')
     inc = 0
     mov = None
     if sep_mov:
@@ -96,19 +97,19 @@ def rename_single_img(img: Path, meta: dict, new_dir=False,
         else:
             mov = None
     while True:
-        filename = f'{artist}-{date:%y-%m-%d}'
-        filename += f'-{inc:02d}' if inc else ''
+        filename = f'{artist}-{date:%y-%m-%d-%H%M}'
         filename += f'-{int(sn):d}' if sn else ''
+        filename += f'-{inc:02d}' if inc else ''
         if 'edited' in img.name:
             filename += '_edited'
         filename += img.suffix
-        if new_dir or root:
-            if sep_mp4 and filename.endswith('.mp4'):
+        if new_dir:
+            if mov:
+                subfolder = f'{artist}_mov'
+            elif sep_mp4 and filename.endswith('.mp4'):
                 subfolder = '_mp4'
             else:
                 subfolder = artist
-            if mov:
-                subfolder += '_mov'
             path = Path(root)/subfolder if root else Path(subfolder)
             path.mkdir(exist_ok=True, parents=True)
         else:
@@ -126,6 +127,8 @@ def rename_single_img(img: Path, meta: dict, new_dir=False,
                 assert not mov_new.exists()
                 mov.rename(mov_new)
             console.log(f'move {img} to {img_new}')
+            if inc:
+                console.log(f'inc: {inc} is used for {img_new}', style='error')
             break
 
 
