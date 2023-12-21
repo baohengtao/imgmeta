@@ -28,7 +28,7 @@ def write_meta(
     if not isinstance(paths, list):
         paths = [paths]
     imgs = itertools.chain.from_iterable(
-        get_img_path(p, sort=False) for p in paths)
+        get_img_path(p) for p in paths)
 
     with (ExifToolHelper() as et,
           ExifTool(common_args=['-G1', '-n']) as etl,
@@ -120,7 +120,7 @@ def rename(paths: List[Path],
     if not isinstance(paths, list):
         paths = [paths]
     imgs = itertools.chain.from_iterable(
-        get_img_path(p, sort=True) for p in paths)
+        get_img_path(p) for p in paths)
     new_ids = {}
     for girl in Girl:
         girl_dict = model_to_dict(girl)

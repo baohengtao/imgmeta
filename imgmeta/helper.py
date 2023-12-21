@@ -1,14 +1,12 @@
-from collections import defaultdict
 from pathlib import Path
 from typing import Iterator
 
-from exiftool import ExifToolHelper
 from geopy.distance import geodesic
 
 from imgmeta import console
 
 
-def get_img_path(path: Path, sort=False, skip_dir=None) -> Iterator[Path]:
+def get_img_path(path: Path, skip_dir=None) -> Iterator[Path]:
     media_ext = ('.jpg', '.mov', '.png', '.jpeg',
                  '.mp4', '.gif', '.heic', '.webp')
     files = []
@@ -27,23 +25,9 @@ def get_img_path(path: Path, sort=False, skip_dir=None) -> Iterator[Path]:
         elif p.is_dir():
             if skip_dir and skip_dir in p.stem:
                 continue
-            yield from get_img_path(p, sort)
-    if sort:
-        yield from _sort_img(files)
-    else:
-        yield from files
+            yield from get_img_path(p)
 
-
-def _sort_img(imgs: list[Path]) -> Iterator[Path]:
-    with ExifToolHelper() as et:
-        tags = et.get_tags(imgs, 'XMP:ImageUniqueID') if imgs else []
-    imgs_dict = defaultdict(list)
-    for tag in tags:
-        imgs_dict[tag.get('XMP:ImageUniqueID')].append(tag['SourceFile'])
-    for _, value in sorted(imgs_dict.items(),
-                           key=lambda x: (-len(x[1]), x[0] or '')):
-        for img in sorted(value):
-            yield Path(img)
+    yield from sorted(files)
 
 
 def diff_meta(modified: dict, original: dict):
