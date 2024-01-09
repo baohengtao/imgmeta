@@ -4,6 +4,8 @@ from pathlib import Path
 import geopy.distance
 import pendulum
 import questionary
+from aweme.model import Artist as AweArtist
+from aweme.model import Post
 from insmeta.model import Artist as InstaArtist
 from insmeta.model import Insta
 from redbook.model import Artist as RedArtist
@@ -40,6 +42,14 @@ def gen_xmp_info(meta) -> dict:
                 res |= note.gen_meta(sn)
             if user_id:
                 artist = RedArtist.from_id(user_id)
+                res |= artist.xmp_info
+
+        case 'aweme':
+            if unique_id:
+                post = Post.from_id(unique_id)
+                res |= post.gen_meta(sn)
+            if user_id:
+                artist = AweArtist.from_id(user_id)
                 res |= artist.xmp_info
 
         case 'instagram':
@@ -187,6 +197,9 @@ class ImageMetaUpdate:
             if lat is None:
                 self.meta['XMP:Subject'] = 'NoWeiboLocation'
                 return
+        elif lat_lng := self.meta.pop('AwemeLocation', None):
+            lat, lng = lat_lng
+            assert lat is not None
         else:
             if not (location := self.meta.get('XMP:Location')):
                 return
