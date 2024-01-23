@@ -85,6 +85,8 @@ def gen_xmp_info(meta) -> dict:
     for v in res.values():
         if isinstance(v, str):
             assert v.strip() == v
+    if res:
+        res['XMP:Subject'] = supplier.lower()
 
     return res
 
@@ -157,6 +159,16 @@ class ImageMetaUpdate:
         self.filepath = meta['SourceFile']
 
     def process_meta(self):
+        if ',' in self.meta.get('QuickTime:Keywords', ''):
+            self.meta['QuickTime:Keywords'] = self.meta[
+                'QuickTime:Keywords'].split(',')
+        if subj := self.meta.get('XMP:Subject'):
+            if isinstance(subj, str):
+                subj = {subj}
+            else:
+                subj = set(subj)
+        else:
+            subj = set()
         if xmp_info := gen_xmp_info(self.meta):
             for k, v in xmp_info.items():
                 if v == '':
@@ -164,9 +176,14 @@ class ImageMetaUpdate:
                 else:
                     assert v
             xmp_info = {k: v for k, v in xmp_info.items() if v != ''}
+            subj.add(xmp_info.pop('XMP:Subject'))
+
             self.meta.update(xmp_info)
         self.move_meta()
+        if subj:
+            self.meta['XMP:Subject'] = sorted(subj)
         self.write_location()
+
         self.assign_raw_file_name()
         description = gen_description(self.meta)
         title = gen_title(self.meta)
@@ -186,8 +203,12 @@ class ImageMetaUpdate:
         self.meta['XMP:RawFileName'] = raw_file_name or filename
 
     def write_location(self):
-        if self.meta.get('XMP:Subject') in ['NoInstagramLocation', 'NoWeiboLocation']:
-            self.meta['XMP:Subject'] = ''
+        subject = self.meta.get('XMP:Subject', [])
+        assert isinstance(subject, list)
+        subject = set(subject)
+        if subject:
+            subject -= {'NoInstagramLocation', 'NoWeiboLocation'}
+            self.meta['XMP:Subject'] = sorted(subject)
 
         if lat_lng := self.meta.pop('InstagramLocation', None):
             if lat_lng == 'not_found':
@@ -196,12 +217,14 @@ class ImageMetaUpdate:
                 return
             lat, lng = lat_lng
             if lat is None:
-                self.meta['XMP:Subject'] = 'NoInstagramLocation'
+                subject.add('NoInstagramLocation')
+                self.meta['XMP:Subject'] = sorted(subject)
                 return
         elif lat_lng := self.meta.pop('WeiboLocation', None):
             lat, lng = lat_lng
             if lat is None:
-                self.meta['XMP:Subject'] = 'NoWeiboLocation'
+                subject.add('NoWeiboLocation')
+                self.meta['XMP:Subject'] = sorted(subject)
                 return
         elif lat_lng := self.meta.pop('AwemeLocation', None):
             lat, lng = lat_lng
@@ -210,6 +233,9 @@ class ImageMetaUpdate:
             if not (location := self.meta.get('XMP:Location')):
                 return
             else:
+                console.log(
+                    f'has locaiton but no latlng: {location}', style='error')
+                return
                 assert False
             if not (addr := Geolocation.get_addr(location)):
                 city, *_ = location.split('·', maxsplit=1)
@@ -280,6 +306,11 @@ class ImageMetaUpdate:
             assert v is not None
             if v == '无':
                 self.meta[k] = ''
+        if keywords := self.meta.get('QuickTime:Keywords'):
+            if isinstance(keywords, list):
+                self.meta['QuickTime:Keywords'] = ','.join(keywords)
+        if len(subj := self.meta.get('XMP:Subject') or []) == 1:
+            self.meta['XMP:Subject'] = subj.pop()
 
     def _assign_multi_tag(self, tag, tag_aux, value):
 
@@ -338,8 +369,9 @@ class ImageMetaUpdate:
 
     def transfer_tag(self, src_tag, dst_tag, is_move=True):
         assert (src_tag != dst_tag)
-        src_meta = {k: str(v) for k, v in self.meta.items(
-        ) if k.endswith(src_tag) and k != dst_tag and v != ''}
+        src_meta = {k:  v if isinstance(v, list) else str(v) for k, v in
+                    self.meta.items() if k.endswith(src_tag)
+                    and k != dst_tag and v != ''}
         if not (src_values := list(src_meta.values())):
             return
         src_value = src_values[0]
@@ -349,7 +381,9 @@ class ImageMetaUpdate:
                     f"{self.filepath}: Multi values of src_meta "
                     f"=> {src_meta}", style='warning')
                 return
-        dst_value = str(self.meta.get(dst_tag, ''))
+        dst_value = self.meta.get(dst_tag, '')
+        dst_value = dst_value if isinstance(dst_value, list) else str(
+            dst_value)
         if (dst_value != '' and dst_value != src_value):
             try:
                 assert (dst_value and src_value)
