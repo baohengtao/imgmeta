@@ -29,10 +29,16 @@ def gen_xmp_info(meta) -> dict:
     match supplier.lower():
         case 'weibo':
             if unique_id:
+                from sinaspider.helper import encode_wb_id
+                if unique_id.isdigit():
+                    unique_id = encode_wb_id(int(unique_id))
                 wb = Weibo.get_or_none(
-                    bid=unique_id) or WeiboMissed.get(bid=unique_id)
-                res |= wb.gen_meta(sn)
-                assert wb.user_id == user_id
+                    bid=unique_id) or WeiboMissed.get_or_none(bid=unique_id)
+                if not wb:
+                    console.log(f'{unique_id} not found', style='error')
+                else:
+                    res |= wb.gen_meta(sn)
+                    assert wb.user_id == user_id
             if user_id:
                 artist = WeiboArtist.from_id(user_id)
                 res |= artist.xmp_info
