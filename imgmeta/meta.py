@@ -44,7 +44,7 @@ def gen_xmp_info(meta) -> dict:
                 res |= artist.xmp_info
         case 'redbook':
             if unique_id:
-                note = Note.from_id(unique_id)
+                note = Note.get_by_id(unique_id)
                 res |= note.gen_meta(sn)
             if user_id:
                 artist = RedArtist.from_id(user_id)
@@ -123,7 +123,7 @@ def rename_single_img(img: Path, meta: dict, new_dir=False,
         filename += img.suffix
         if new_dir:
             if mov:
-                subfolder = f'{artist}_mov'
+                subfolder = '_mov'
             elif sep_mp4 and filename.endswith('.mp4'):
                 subfolder = '_mp4'
             else:

@@ -126,11 +126,11 @@ def rename(paths: List[Path],
     new_ids = {}
     for girl in Girl:
         girl_dict = model_to_dict(girl)
-        for col in ['sina', 'red', 'inst']:
+        for col in ['sina', 'red', 'inst', 'awe']:
             if uid := girl_dict[f'{col}_id']:
                 assert uid not in new_ids
                 new_ids[uid] = girl_dict[f'{col}_num']
-    old_ids = {uid for uid, num in new_ids.items() if num > 0}
+    old_ids = {str(uid) for uid, num in new_ids.items() if num > 0}
     name2folder = {g.username: g.folder for g in Girl if g.folder}
 
     with (get_progress() as progress, ExifToolHelper() as et):
@@ -141,7 +141,7 @@ def rename(paths: List[Path],
             fpath = [root] if root else []
             if (uid := meta.get('XMP:ImageSupplierID')) is None:
                 subfolder = 'None'
-            elif uid in old_ids:
+            elif str(uid) in old_ids:
                 subfolder = 'User'
             else:
                 subfolder = 'New'
@@ -154,6 +154,52 @@ def rename(paths: List[Path],
             r = Path(*fpath) if fpath else None
 
             rename_single_img(img, meta, new_dir, r, sep_mp4, sep_mov)
+
+
+@app.command(help='Rename imgs and videos')
+def rename_awe(paths: List[Path],
+               new_dir: Annotated[bool, Option(
+                   '--new-dir/--no-new-dir', '-d/-D')] = False,
+               root: Path = None,
+               sep_new: Annotated[bool, Option('--sep-new', '-n')] = False,
+               sep_folder: Annotated[bool, Option(
+                   '--sep-folder', '-f')] = False
+
+               ):
+    assert not (sep_new and root)
+    if not isinstance(paths, list):
+        paths = [paths]
+    imgs = itertools.chain.from_iterable(
+        get_img_path(p) for p in paths)
+    new_ids = {}
+    for girl in Girl:
+        girl_dict = model_to_dict(girl)
+        for col in ['sina', 'red', 'inst']:
+            if uid := girl_dict[f'{col}_id']:
+                assert uid not in new_ids
+                new_ids[uid] = girl_dict[f'{col}_num']
+    old_ids = {uid for uid, num in new_ids.items() if num > 0}
+    name2folder = {g.username: g.folder for g in Girl if g.folder}
+
+    with (get_progress() as progress, ExifToolHelper() as et):
+        for img in progress.track(list(imgs), description='renaming imgs...'):
+            meta = et.get_metadata(img)[0]
+            fpath = [root] if root else []
+            if (uid := meta.get('XMP:ImageSupplierID')) is None:
+                subfolder = 'None'
+            elif uid in old_ids:
+                subfolder = 'User'
+            else:
+                subfolder = 'New'
+            album_folder = name2folder.get(meta.get('XMP:Artist'), 'None')
+            if sep_new:
+                fpath.append(subfolder)
+            if sep_folder:
+                fpath.append(album_folder)
+            fpath.append(img.suffix[1:])
+            r = Path(*fpath) if fpath else None
+
+            rename_single_img(img, meta, new_dir, r, sep_mp4=False)
 
 
 @app.command(help='Clean files')
